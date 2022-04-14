@@ -17,7 +17,8 @@ setup(
         'numpy>=1.22.0'
         'matplotlib>=3.5.0'
     ],
+    python_requires=">=3.7",
     author="Leo D'Amato",
     author_email="leo.damato.dev@gmail.com",
-    classifiers=["Programming Language :: Python :: 3"]
+    classifiers=["Programming Language :: Python :: 3", "Operating System :: OS Independent"]
 )
