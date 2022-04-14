@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='gym_simplegrid',
-    version='1.0.0',
+    version='1.0.2',
     keywords='reinforcement learning, environment, gridworld, agent, rl, openaigym, openai-gym, gym',
     url='https://github.com/damat-le/gym-simplegrid',
     description='Simple Gridworld Environment for OpenAI Gym',
@@ -14,7 +14,7 @@ setup(
     packages=['gym_simplegrid', 'gym_simplegrid.envs'],
     install_requires=[
         'gym>=0.23.0',
-        'numpy>=1.22.0'
+        'numpy>=1.22.0',
         'matplotlib>=3.5.0'
     ],
     python_requires=">=3.7",
