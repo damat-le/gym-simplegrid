@@ -1,13 +1,14 @@
 import sys
 import numpy as np
+import matplotlib.pyplot as plt
 
-# Only ask users to install matplotlib if they actually need it
-try:
-    import matplotlib.pyplot as plt
-except:
-    print('To display the environment in a window, please install matplotlib, eg:')
-    print('pip3 install --user matplotlib')
-    sys.exit(-1)
+# # Only ask users to install matplotlib if they actually need it
+# try:
+#     import matplotlib.pyplot as plt
+# except:
+#     print('To display the environment in a window, please install matplotlib, eg:')
+#     print('pip3 install --user matplotlib')
+#     sys.exit(-1)
 
 class Window:
     """

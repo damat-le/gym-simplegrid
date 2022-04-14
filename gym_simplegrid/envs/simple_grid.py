@@ -5,7 +5,6 @@ from io import StringIO
 from typing import Optional
 
 import numpy as np
-from matplotlib.pyplot import pause
 
 from gym_simplegrid.grid import SimpleGrid, Wall, Goal, Start
 from gym_simplegrid.window import Window
@@ -387,7 +386,6 @@ class SimpleGridEnv(Env):
             self.window = Window('my_custom_env')
             self.window.show(block=False)
         self.window.show_img(img, self.fps)
-        #pause(.1)
 
     def __render_rgb_array(self):
         """
