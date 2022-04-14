@@ -4,7 +4,7 @@ SimpleGrid is a super simple gridworld environment for OpenAI gym. It is easy to
 
 It is also efficient, lightweight and has few dependencies (gym, numpy, matplotlib). 
 
-![](img/simplegrid_env.png)
+![](img/simplegrid.gif)
 
 SimpleGrid involves navigating a grid from Start(S) (red tile) to Goal(G) (green tile) without colliding with any Wall(W) (black tiles) by walking over
 the Empty(E) (white tiles) cells. The yellow circle denotes the agent's current position. 
@@ -44,7 +44,7 @@ Please use this bibtex if you want to cite this repository in your publications:
 }
 ```
 
-## Get Started
+## Getting Started
 
 Basic usage options:
 
