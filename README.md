@@ -88,7 +88,7 @@ Example with rendering:
 import gym 
 import gym_simplegrid
 
-env = gym.make('SimpleGrid-8x8-v0', desc=desc)
+env = gym.make('SimpleGrid-8x8-v0')
 observation = env.reset()
 T = 50
 for _ in range(T):
@@ -96,7 +96,7 @@ for _ in range(T):
     env.render()
     observation, reward, done, info = env.step(action)
     if done:
-        observation, info = env.reset(return_info=True)
+        observation = env.reset()
 env.close()
 ```
 
