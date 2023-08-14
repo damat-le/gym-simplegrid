@@ -1,461 +1,410 @@
 from __future__ import annotations
-
-from contextlib import closing
-from io import StringIO
-from typing import Optional
-
+import random
 import numpy as np
-
-from gym_simplegrid.grid import SimpleGrid, Wall, Goal, Start
+from gym import spaces, Env
+import gym_simplegrid.rendering as r
 from gym_simplegrid.window import Window
 
-from gym import Env, spaces, utils
-from gym.envs.toy_text.utils import categorical_sample
-
 MAPS = {
-    "4x4": ["SEEE", "EWEW", "EEEW", "WEEG"],
+    "4x4": ["0000", "0101", "0001", "1000"],
     "8x8": [
-        "SEEEEEEE",
-        "EEEEEEEE",
-        "EEEWEEEE",
-        "EEEEEWEE",
-        "EEEWEEEE",
-        "EWWEEEWE",
-        "EWEEWEWE",
-        "EEEWEEEG",
+        "00000000",
+        "00000000",
+        "00010000",
+        "00000100",
+        "00010000",
+        "01100010",
+        "01001010",
+        "00010000",
     ],
 }
 
-REWARD_MAP = {
-        b'E': 0.0,
-        b'S': 0.0,
-        b'W': -1.0,
-        b'G': 1.0,
-    }
-
-
 class SimpleGridEnv(Env):
     """
-    SimplGrid involves navigating a grid from Start(S) to Goal(G) without colliding with any Wall(W) by walking over
-    the Empty(E) cell. Optionally, it is possible to introduce a noise in the environment that makes the agent not always 
-    move in the intended direction.
+    Simple Grid Environment
 
+    The environment is a grid with obstacles (walls) and agents. The agents can move in one of the four cardinal directions. If they try to move over an obstacle or out of the grid bounds, they stay in place. Each agent has a unique color and a goal state of the same color. The environment is episodic, i.e. the episode ends when all agents reach their goals.
 
-    ### Action Space
-    The agent takes a 1-element vector for actions.
-    The action space is `(dir)`, where `dir` decides direction to move in which can be:
+    To initialise the grid, the user must decide where to put the walls on the grid. This can bee done by either selecting an existing map or by passing a custom map. To load an existing map, the name of the map must be passed to the `obstacle_map` argument. Available pre-existing map names are "4x4" and "8x8". Conversely, if to load custom map, the user must provide a map correctly formatted. The map must be passed as a list of strings, where each string denotes a row of the grid and it is composed by a sequence of 0s and 1s, where 0 denotes a free cell and 1 denotes a wall cell. An example of a 4x4 map is the following:
+    ["0000", 
+     "0101", 
+     "0001", 
+     "1000"]
 
-    - 0: LEFT
-    - 1: DOWN
-    - 2: RIGHT
-    - 3: UP
+    The user must also decide the number of agents and their starting and goal positions on the grid. This can be done by passing two lists of tuples, namely `starts_xy` and `goals_xy`, where each tuple is a pair of coordinates (x, y) representing the agent starting/goal position. 
 
-    ### Observation Space
-    The observation is a value representing the agent's current position as
-    current_row * ncols + current_col (where both the row and col start at 0).
-    For example, the goal position in the 4x5 map can be calculated as follows: 3 * 5 + 3 = 18.
-    The number of possible observations is dependent on the size of the map.
-    For example, the 4x4 map has 16 possible observations.
+    Currently, the user must also define the color of each agent. This can be done by passing a list of strings, where each string is a color name. The available color names are: red, green, blue, purple, yellow, grey and black. This requirement will be removed in the future and the color will be assigned automatically.
 
-    ### Rewards
-    It is possible to customize the rewards for each state by passing a custom reward map through the argument `reward_map`.
-
-    Default reward schedule is:
-    - Reach goal(G): +10
-    - Reach wall(W): -1
-    - Reach empty(E): 0
-
-    ### Arguments
-    ```
-    gym.make('SimpleGrid-v0', desc=None, map_name=None, p_noise=None)
-    ```
-
-    `desc`: Used to specify custom map for frozen lake. For example,
-
-        desc=["SEEE", "EWEW", "EEEW", "WEEG"].
-
-    `map_name`: ID to use any of the preloaded maps.
-
-        "4x4": ["SEEE", "EWEW", "EEEW", "WEEG"]
-
-        "8x8": [
-            "SEEEEEEE",
-            "EEEEEEEE",
-            "EEEWEEEE",
-            "EEEEEWEE",
-            "EEEWEEEE",
-            "EWWEEEWE",
-            "EWEEWEWE",
-            "EEEWEEEG",
-        ]
-
-    `p_noise`: float. Probability of making a random move different than the desired action.
-        It must be a value between 0 and 1.
-        If not None, then the desired action is taken with probability 1-p_noise.
-
-        For example, if action is left and p_noise=.3, then:
-        - P(move left)=.7
-        - P(move up)=.1
-        - P(move down)=.1
-        - P(move right)=.1
-
-    ### Notes on rendering
-    To render properly the environment, remember that the point (x,y) in the desc matrix
-    corresponds to the point (y,x) in the rendered matrix.
-
-    This is because the rendering code works on width and height while the computation 
-    in the environment works on x and y coordinates 
-
-    ### Version History
-    * v0: Initial versions release (1.0.0)
+    The user can also decide whether the agents disappear when they reach their goal. This can be done by passing a boolean value to `disappear_on_goal`. If `disappear_on_goal` is True, the agent disappears when it reaches its goal. If `disappear_on_goal` is False, the agent remains on the grid after it reaches its goal. This feature is currently not implemented and will be added in future versions.
     """
+    FREE: int = 0
+    OBSTACLE: int = 1
+    MOVES: dict[int,tuple] = {
+        0: (0, 0),  #STAY
+        1: (-1, 0), #UP
+        2: (1, 0),  #DOWN
+        3: (0, -1), #LEFT
+        4: (0, 1)   #RIGHT
+    }
 
-    
-
-    metadata = {"render_modes": ["human", "ansi", "rgb_array"], "render_fps": 4}
-
-    def __init__(self, desc: list[str] =None, map_name: str =None, reward_map: dict[bytes, float] =None, p_noise: float =None):
+    def __init__(self,     
+        obstacle_map: str | list[str], 
+        start_xy: tuple, 
+        goal_xy: tuple, 
+        agent_color: str = 'yellow', 
+        seed: int | None = None   
+    ):
         """
+        Initialise the environment.
+
         Parameters
         ----------
-        desc: list[str]
-            Custom map for the environment.
-        map_name: str
-            ID to use any of the preloaded maps.
-        reward_map: dict[bytes, float]
-            Custom reward map.
-        p_noise: float
-            Probability of making a random move different than the desired action.
-            It must be a value between 0 and 1.
-            If not None, then the desired action is taken with probability 1-p_noise.
-
-            For example, if action is left and p_noise=.3, then:
-            - P(move left)=.7
-            - P(move up)=.1
-            - P(move down)=.1
-            - P(move right)=.1
+        seed: int | None
+            Random seed.
+        start_xy: tuple
+            Starting (x,y) position of the agent.
+        goals_xy: tuple
+            Goal (x,y) position of the agent.
+        agent_color: str
+            Color of the agent. The available colors are: red, green, blue, purple, yellow, grey and black. Note that the goal cell will have the same color.
+        obstacle_map: str | list[str]
+            Map to be loaded. If a string is passed, the map is loaded from a set of pre-existing maps. The names of the available pre-existing maps are "4x4" and "8x8". If a list of strings is passed, the map provided by the user is parsed and loaded. The map must be a list of strings, where each string denotes a row of the grid and is a sequence of 0s and 1s, where 0 denotes a free cell and 1 denotes a wall cell. 
+            An example of a 4x4 map is the following:
+            ["0000",
+             "0101", 
+             "0001",
+             "1000"]
         """
-        self.p_noise = p_noise
-        self.desc = self.__initialise_desc(desc, map_name)
-        self.nrow, self.ncol = self.desc.shape
+        self.seed = seed        
         
-        # Reward
-        self.reward_map = self.__initialise_reward_map(reward_map)
-        self.reward_range = (min(self.reward_map.values()), max(self.reward_map.values()))
+        # Env confinguration
+        self.obstacles = self.parse_obstacle_map(obstacle_map) #walls
+        self.nrow, self.ncol = self.obstacles.shape
 
-        # Initialise action and state spaces
-        self.nA = 4
-        self.nS = self.nrow * self.ncol
-        self.observation_space = spaces.Discrete(self.nS)
-        self.action_space = spaces.Discrete(self.nA)
+        self.start_xy = start_xy
+        self.goal_xy = goal_xy
 
-        # Initialise env dynamics
-        self.initial_state = None
-        self.initial_state_distrib = self.__get_initial_state_distribution(self.desc)
-        self.P = self.__get_env_dynamics()
+        self.action_space = spaces.Discrete(len(self.MOVES))
+        self.observation_space = spaces.Discrete(self.nrow * self.ncol)
 
-        # Rendering
+        # internal vars initialised in reset()
+        self.curr_pos_xy: tuple = None
+        self.curr_reward: float = 0.0
+        self.done: bool = False
+        self.info: dict = dict()
+
+        # Rendering configuration
         self.window = None
-        self.grid = self.__initialise_grid_from_desc(self.desc)
-        self.fps = 5
-        
-    @staticmethod
-    def __initialise_desc(desc: list[str], map_name: str) -> np.ndarray:
+        self.agent_color = agent_color
+        self.tile_cache = {}
+        self.fps = 10
+
+    def set_seed(self, seed: int) -> None:
         """
-        Initialise the desc matrix.
+        Seed the environment.
 
         Parameters
         ----------
-        desc: list[list[str]]
-            Custom map for the environment.
-        map_name: str
-            ID to use any of the preloaded maps.
+        seed: int
+            Random seed.
+        """
+        np.random.seed(seed)
+        random.seed(seed)
 
-        Returns
-        -------
-        desc: np.ndarray
-            The desc matrix.
+    def integrity_checks(self) -> None:
+        # check that goals do not overlap with walls
+        assert self.obstacles[self.goal_xy] == self.FREE, \
+            f"Goal position {self.goal_xy} overlaps with a wall."
+        
+    def parse_obstacle_map(self, obstacle_map) -> np.ndarray:
+        """
+        Initialise the grid.
+
+        The grid is described by a map, i.e. a list of strings where each string denotes a row of the grid and is a sequence of 0s and 1s, where 0 denotes a free cell and 1 denotes a wall cell.
+
+        The grid can be initialised by passing a map name or a custom map.
+        If a map name is passed, the map is loaded from a set of pre-existing maps. If a custom map is passed, the map provided by the user is parsed and loaded.
 
         Examples
         --------
-        >>> desc = ["SE", "WG"]
-        >>> SimpleGridEnv.__initialise_desc(desc, None)
-        array([[b'S', b'E'],
-               [b'W', b'G']], dtype='|S1')
+        >>> my_map = ["001", "010", "011]
+        >>> SimpleGridEnv.parse_obstacle_map(my_map)
+        array([[0, 0, 1],
+               [0, 1, 0],
+               [0, 1, 1]])
         """
-        if desc is not None:
-            return np.asarray(desc, dtype="c")
-        if desc is None and map_name is None:
-            desc = generate_random_map()
-            return np.asarray(desc, dtype="c")
-        if desc is None and map_name is not None:
-            desc = MAPS[map_name]
-            return np.asarray(desc, dtype="c")
-
-    @staticmethod
-    def __initialise_grid_from_desc(desc: list[str]) -> SimpleGrid:
-        """
-        Initialise the grid to be rendered from the desc matrix.
-
-        @NOTE: the point (x,y) in the desc matrix corresponds to the
-        point (y,x) in the rendered matrix.
-
-        Parameters
-        ----------
-        desc: list[list[str]]
-            Custom map for the environment.
-        
-        Returns
-        -------
-        grid: SimpleGrid
-            The grid to be rendered.
-        """
-        nrow, ncol = desc.shape
-        grid = SimpleGrid(width=ncol, height=nrow)
-        for row in range(nrow):
-            for col in range(ncol):
-                letter = desc[row, col]
-                if letter == b'G':
-                    grid.set(col, row, Goal())
-                elif letter == b'W':
-                    grid.set(col, row, Wall(color='black'))
-                else:
-                    grid.set(col, row, None)
-        return grid
-
-    @staticmethod
-    def __initialise_reward_map(reward_map: dict[bytes, float]) -> dict[bytes, float]:
-        if reward_map is None:
-            return REWARD_MAP
+        if isinstance(obstacle_map, list):
+            map_str = np.asarray(obstacle_map, dtype='c')
+            map_int = np.asarray(map_str, dtype=int)
+            return map_int
+        elif isinstance(obstacle_map, str):
+            map_str = MAPS[obstacle_map]
+            map_str = np.asarray(map_str, dtype='c')
+            map_int = np.asarray(map_str, dtype=int)
+            return map_int
         else:
-            return reward_map
+            raise ValueError(f"You must provide either a map of obstacles or the name of an existing map. Available existing maps are {', '.join(MAPS.keys())}.")
 
-    @staticmethod
-    def __get_initial_state_distribution(desc: list[str]) -> np.ndarray:
-        """
-        Get the initial state distribution.
-        
-        If desc contains multiple times the letter 'S', then the initial
-        state distribution will a uniform on the respective states and the
-        initial state radomly sampled from it.     
-
-        Parameters
-        ----------
-        desc: list[str]
-            Custom map for the environment.
-        
-        Returns:
-        --------
-        initial_state_distrib: np.ndarray
-
-        Examples
-        --------
-        >>> desc = ["SES", "WEE", "SEG"]
-        >>> SimpleGridEnv.__get_initial_state_distribution(desc)
-        array([0.33333333, 0.        , 0.33333333, 0.        , 0.        ,
-        0.        , 0.33333333, 0.        , 0.        ])
-        """
-        initial_state_distrib = np.array(desc == b"S").astype("float64").ravel()
-        initial_state_distrib /= initial_state_distrib.sum()
-        return initial_state_distrib
-
-    def __to_s(self, row: int, col: int) -> int:
+    def to_s(self, row: int, col: int) -> int:
         """
         Transform a (row, col) point to a state in the observation space.
         """
         return row * self.ncol + col
 
-    def __to_next_xy(self, row: int, col: int, a: int) -> tuple[int, int]:
+    def to_xy(self, s: int) -> tuple[int, int]:
         """
-        Compute the next position on the grid when starting at (row, col)
-        and taking the action a.
+        Transform a state in the observation space to a (row, col) point.
+        """
+        return (s // self.ncol, s % self.ncol)
 
-        Remember:
-        - 0: LEFT
-        - 1: DOWN
-        - 2: RIGHT
-        - 3: UP
+    def on_goal(self) -> bool:
         """
-        if a == 0:
-            col = max(col - 1, 0)
-        elif a == 1:
-            row = min(row + 1, self.nrow - 1)
-        elif a == 2:
-            col = min(col + 1, self.ncol - 1)
-        elif a == 3:
-            row = max(row - 1, 0)
-        return (row, col)
+        Check if the agent is on its own goal.
+        """
+        return self.curr_pos_xy == self.goal_xy
 
-    def __transition(self, row: int, col: int, a: int) -> tuple[int, float, bool]:
+    def is_free(self, row: int, col: int) -> bool:
         """
-        Compute next state, reward and done when starting at (row, col)
-        and taking the action action a.
+        Check if a cell is free.
         """
-        newrow, newcol = self.__to_next_xy(row, col, a)
-        newstate = self.__to_s(newrow, newcol)
-        newletter = self.desc[newrow, newcol]
-        done = bytes(newletter) in b"GW"
-        reward = self.reward_map[newletter]
-        return newstate, reward, done
+        return self.obstacles[row, col] == self.FREE
+    
+    def is_in_bounds(self, row: int, col: int) -> bool:
+        """
+        Check if a target cell is in the grid bounds.
+        """
+        return 0 <= row < self.nrow and 0 <= col < self.ncol
 
-    def __get_env_dynamics(self):
+    def move(self, action: int) -> None:
         """
-        Compute the dynamics of the environment.
-
-        For each state-action-pair, the following tuple is computed:
-            - the probability of transitioning to the next state
-            - the next state
-            - the reward
-            - the done flag
+        Move the agent according to the selected action.
         """
-        nrow, ncol = self.nrow, self.ncol
-        nA, nS = self.nA, self.nS 
+        #assert action in self.action_space
 
-        P = {s: {a: [] for a in range(nA)} for s in range(nS)}
+        # Get the current position of the agent
+        row, col = self.curr_pos_xy
+        dx, dy = self.MOVES[action]
+
+        # Compute the target position of the agent
+        target_row = row + dx
+        target_col = col + dy
+
+        # Compute the reward
+        self.curr_reward = self.get_reward(target_row, target_col)
         
-        for row in range(nrow):
-            for col in range(ncol):
-                s = self.__to_s(row, col)
-                for a in range(nA):
-                    li = P[s][a]
-                    letter = self.desc[row, col]
-                    if letter in b"GW":
-                        li.append((1.0, s, 0, True)) #@NOTE: is reward=0 correct? Probably the value doesn't matter.
-                    else:
-                        if self.p_noise:
-                            li.append( (1-self.p_noise, *self.__transition(row, col, a)) )
-                            for b in (a_ for a_ in range(nA) if a_ != a):
-                                li.append((self.p_noise / (nA - 1), *self.__transition(row, col, b)))
-                        else:
-                            li.append((1.0, *self.__transition(row, col, a)))
-        return P
-
-    def step(self, a):
-        transitions = self.P[self.s][a]
-        i = categorical_sample([t[0] for t in transitions], self.np_random)
-        p, s, r, d = transitions[i]
-        self.s = s
-        self.lastaction = a
-        return (int(s), r, d, {"prob": p})
-
-    def reset(
-        self,
-        *,
-        seed: Optional[int] = None,
-        return_info: bool = False,
-        options: Optional[dict] = None,
-    ):
-        super().reset(seed=seed)
-        # sample initial state from the initial state distribution
-        self.s = categorical_sample(self.initial_state_distrib, self.np_random)
-        # set the starting red tile on the grid to render
+        # Check if the move is valid
+        if not self.done and self.is_in_bounds(target_row, target_col) and self.is_free(target_row, target_col):
+            self.curr_pos_xy = (target_row, target_col)
+            self.done = self.on_goal()
         
-        if self.initial_state is not None:
-            self.grid.set(self.initial_state % self.ncol, self.initial_state // self.ncol, None)
-        self.grid.set(self.s % self.ncol, self.s // self.ncol, Start())
-        
-        self.initial_state = self.s
-        self.lastaction = None
+    def step(self, action: int):
+        """
+        Take a step in the environment.
+        """
+        self.move(action)
+        return self.observation()
+    
+    def reset(self) -> tuple:
+        """
+        Reset the environment.
 
-        if not return_info:
-            return int(self.s)
+        By deafult, the agents are reset to the starting positions indicated during class initialisation. However, the user can also pass a dict of new starting positions.
+        """
+        # Set seed
+        self.set_seed(self.seed)
+        # Reset agent position
+        self.curr_pos_xy = self.start_xy
+        # Reset reward, done and info
+        self.curr_reward = self.get_reward(*self.curr_pos_xy)
+        self.done = self.on_goal()
+        self.info = {}
+        # Check integrity
+        self.integrity_checks()
+
+        return self.observation()
+    
+    def observation(self) -> tuple:
+        return self.curr_pos_xy, self.curr_reward, self.done, self.info
+
+    def get_reward(self, x: int, y: int) -> float:
+        """
+        Get the reward of a given cell.
+        """
+        if not self.is_in_bounds(x, y):
+            return -1.0
+        elif not self.is_free(x, y):
+            return -5.0
+        elif (x, y) == self.goal_xy:
+            return 1.0
         else:
-            return int(self.s), {"prob": 1}
+            return 0.0
 
-    def render(self, mode="human"):
-        if mode == "ansi":
-            return self.__render_text(self.desc.tolist())
-        elif mode == "human":
-            return self.__render_gui()
-        elif mode == "rgb_array":
-            return self.__render_rgb_array()
+    def close(self):
+        """
+        Close the environment.
+        """
+        if self.window:
+            self.window.close()
+        return None
+
+    def render(self, caption=None, mode='human'):
+        """
+        Render the environment.
+        """
+        if mode == "human":
+            return self.render_gui(caption=caption)
         else:
             raise ValueError(f"Unsupported rendering mode {mode}")
-
-    def __render_gui(self):
+    
+    def render_gui(self, caption, tile_size=r.TILE_PIXELS, highlight_mask=None):
         """
         @NOTE: Once again, if agent position is (x,y) then, to properly 
         render it, we have to pass (y,x) to the grid.render method.
+
+        tile_size: tile size in pixels
         """
-        img = self.grid.render(
-            tile_size=32,
-            agent_pos=(self.s % self.ncol, self.s // self.ncol),
-            agent_dir=0
-        )
+        width = self.ncol
+        height = self.nrow
+
+        if highlight_mask is None:
+            highlight_mask = np.zeros(shape=(width, height), dtype=bool)
+
+        # Compute the total grid size
+        width_px = width * tile_size
+        height_px = height * tile_size
+
+        img = np.zeros(shape=(height_px, width_px, 3), dtype=np.uint8)
+
+        # Render grid with obstacles
+        for x in range(self.nrow):
+            for y in range(self.ncol):
+                if self.obstacles[x,y] == self.OBSTACLE:
+                    cell = r.Wall(color='black')
+                    tile_img = self.render_tile(cell, tile_size=tile_size)
+                else:
+                    cell = None
+                    tile_img = self.render_tile(cell, tile_size=tile_size)
+
+                height_min = x * tile_size
+                height_max = (x+1) * tile_size
+                width_min = y * tile_size
+                width_max = (y+1) * tile_size
+                img[height_min:height_max, width_min:width_max, :] = tile_img
+
+        # Render goals
+        x, y = self.goal_xy
+        cell = r.Goal(color=self.agent_color)
+        tile_img = self.render_tile(cell, tile_size=tile_size)
+        height_min = x * tile_size
+        height_max = (x+1) * tile_size
+        width_min = y * tile_size
+        width_max = (y+1) * tile_size
+        img[height_min:height_max, width_min:width_max, :] = tile_img
+
+        # Render agent
+        x, y = self.curr_pos_xy
+        cell = r.Agent(color=self.agent_color)
+        tile_img = self.render_tile(cell, tile_size=tile_size)
+        height_min = x * tile_size
+        height_max = (x+1) * tile_size
+        width_min = y * tile_size
+        width_max = (y+1) * tile_size
+        img[height_min:height_max, width_min:width_max, :] = tile_img
+
         if not self.window:
             self.window = Window('my_custom_env')
             self.window.show(block=False)
-        self.window.show_img(img, self.fps)
+        self.window.show_img(img, caption, self.fps)
 
-    def __render_rgb_array(self):
+        return img
+        
+    def render_tile(
+        self,
+        obj: r.WorldObj,
+        highlight=False,
+        tile_size=r.TILE_PIXELS,
+        subdivs=3
+    ):
         """
-        Render the environment to an rgb array.
+        Render a tile and cache the result
         """
-        img = self.grid.render(
-            tile_size=32,
-            agent_pos=(self.s % self.ncol, self.s // self.ncol),
-            agent_dir=0
-        )
+
+        # Hash map lookup key for the cache
+        if not isinstance(obj, r.Agent):
+            key = (None, highlight, tile_size)
+            key = obj.encode() + key if obj else key
+
+            if key in self.tile_cache:
+                return self.tile_cache[key]
+
+        img = np.zeros(shape=(tile_size * subdivs, tile_size * subdivs, 3), dtype=np.uint8) + 255
+
+        if obj != None:
+            obj.render(img)
+
+        # Highlight the cell if needed
+        if highlight:
+            r.highlight_img(img)
+
+        # Draw the grid lines (top and left edges)
+        r.fill_coords(img, r.point_in_rect(0, 0.031, 0, 1), (170, 170, 170))
+        r.fill_coords(img, r.point_in_rect(0, 1, 0, 0.031), (170, 170, 170))
+
+        # Downsample the image to perform supersampling/anti-aliasing
+        img = r.downsample(img, subdivs)
+
+        # Cache the rendered tile
+        if not isinstance(obj, r.Agent):
+            self.tile_cache[key] = img
+
         return img
 
-    def __render_text(self, desc):
-        outfile = StringIO()
+    def encode(self, vis_mask=None):
+        """
+        Produce a compact numpy encoding of the grid
+        """
+    #     width = self.ncol
+    #     height = self.nrow
 
-        row, col = self.s // self.ncol, self.s % self.ncol
-        desc = [[c.decode("utf-8") for c in line] for line in desc]
-        desc[row][col] = utils.colorize(desc[row][col], "red", highlight=True)
-        if self.lastaction is not None:
-            outfile.write(f"  ({['Left', 'Down', 'Right', 'Up'][self.lastaction]})\n")
-        else:
-            outfile.write("\n")
-        outfile.write("\n".join("".join(line) for line in desc) + "\n")
+    #     if vis_mask is None:
+    #         vis_mask = np.ones((width, height), dtype=bool)
 
-        with closing(outfile):
-            return outfile.getvalue()
+    #     array = np.zeros((width, height, 3), dtype='uint8')
 
-    def close(self):
-        if self.window:
-            self.window.close()
-        return
+    #     for i in range(width):
+    #         for j in range(height):
+    #             if vis_mask[i, j]:
+    #                 v = self.get(i, j)
 
+    #                 if v is None:
+    #                     array[i, j, 0] = r.OBJECT_TO_IDX['empty']
+    #                     array[i, j, 1] = 0
+    #                     array[i, j, 2] = 0
 
-def generate_random_map(size=8, p=0.8):
-    """
-    Generates a random valid map (one that has a path from start to goal)
-    
-    Parameters
-    ----------
-    size: int 
-        Size of each side of the grid
-    p: float
-        Probability that a tile is empty
-    """
-    valid = False
+    #                 else:
+    #                     array[i, j, :] = v.encode()
 
-    # DFS to check that it's a valid path.
-    def is_valid(res):
-        frontier, discovered = [], set()
-        frontier.append((0, 0))
-        while frontier:
-            r, c = frontier.pop()
-            if not (r, c) in discovered:
-                discovered.add((r, c))
-                directions = [(1, 0), (0, 1), (-1, 0), (0, -1)]
-                for x, y in directions:
-                    r_new = r + x
-                    c_new = c + y
-                    if r_new < 0 or r_new >= size or c_new < 0 or c_new >= size:
-                        continue
-                    if res[r_new][c_new] == "G":
-                        return True
-                    if res[r_new][c_new] != "W":
-                        frontier.append((r_new, c_new))
-        return False
+    #     return array
+        pass
 
-    while not valid:
-        p = min(1, p)
-        res = np.random.choice(["E", "W"], (size, size), p=[p, 1 - p])
-        res[0][0] = "S"
-        res[-1][-1] = "G"
-        valid = is_valid(res)
-    return ["".join(x) for x in res]
+    @staticmethod
+    def decode(array):
+        """
+        Decode an array grid encoding back into a grid
+        """
+
+    #     width, height, channels = array.shape
+    #     assert channels == 3
+
+    #     vis_mask = np.ones(shape=(width, height), dtype=bool)
+
+    #     grid = SimpleGrid(width, height)
+    #     for i in range(width):
+    #         for j in range(height):
+    #             type_idx, color_idx, state = array[i, j]
+    #             v = WorldObj.decode(type_idx, color_idx, state)
+    #             grid.set(i, j, v)
+    #             vis_mask[i, j] = (type_idx != OBJECT_TO_IDX['unseen'])
+
+    #     return grid, vis_mask
+        pass

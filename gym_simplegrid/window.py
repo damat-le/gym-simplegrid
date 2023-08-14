@@ -1,5 +1,3 @@
-import sys
-import numpy as np
 import matplotlib.pyplot as plt
 
 # # Only ask users to install matplotlib if they actually need it
@@ -41,7 +39,7 @@ class Window:
 
         self.fig.canvas.mpl_connect('close_event', close_handler)
 
-    def show_img(self, img, fps):
+    def show_img(self, img, caption, fps):
         """
         Show an image or update the image being shown
         """
@@ -53,6 +51,9 @@ class Window:
 
         # Update the image data
         self.imshow_obj.set_data(img)
+
+        # Update the image caption
+        self.set_caption(caption)
 
         # Request the window be redrawn
         self.fig.canvas.draw_idle()
