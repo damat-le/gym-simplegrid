@@ -40,11 +40,10 @@ class SimpleGridEnv(Env):
     FREE: int = 0
     OBSTACLE: int = 1
     MOVES: dict[int,tuple] = {
-        0: (0, 0),  #STAY
-        1: (-1, 0), #UP
-        2: (1, 0),  #DOWN
-        3: (0, -1), #LEFT
-        4: (0, 1)   #RIGHT
+        0: (-1, 0), #UP
+        1: (1, 0),  #DOWN
+        2: (0, -1), #LEFT
+        3: (0, 1)   #RIGHT
     }
 
     def __init__(self,     
@@ -280,36 +279,25 @@ class SimpleGridEnv(Env):
             for y in range(self.ncol):
                 if self.obstacles[x,y] == self.OBSTACLE:
                     cell = r.Wall(color='black')
-                    tile_img = self.render_tile(cell, tile_size=tile_size)
                 else:
                     cell = None
-                    tile_img = self.render_tile(cell, tile_size=tile_size)
 
-                height_min = x * tile_size
-                height_max = (x+1) * tile_size
-                width_min = y * tile_size
-                width_max = (y+1) * tile_size
-                img[height_min:height_max, width_min:width_max, :] = tile_img
+                img = self.update_cell_in_img(img, x, y, cell, tile_size)
 
-        # Render goals
+        # Render start
+        x, y = self.start_xy
+        cell = r.ColoredTile(color="red")
+        img = self.update_cell_in_img(img, x, y, cell, tile_size)
+
+        # Render goal
         x, y = self.goal_xy
-        cell = r.Goal(color=self.agent_color)
-        tile_img = self.render_tile(cell, tile_size=tile_size)
-        height_min = x * tile_size
-        height_max = (x+1) * tile_size
-        width_min = y * tile_size
-        width_max = (y+1) * tile_size
-        img[height_min:height_max, width_min:width_max, :] = tile_img
+        cell = r.ColoredTile(color="green")
+        img = self.update_cell_in_img(img, x, y, cell, tile_size)
 
         # Render agent
         x, y = self.curr_pos_xy
         cell = r.Agent(color=self.agent_color)
-        tile_img = self.render_tile(cell, tile_size=tile_size)
-        height_min = x * tile_size
-        height_max = (x+1) * tile_size
-        width_min = y * tile_size
-        width_max = (y+1) * tile_size
-        img[height_min:height_max, width_min:width_max, :] = tile_img
+        img = self.update_cell_in_img(img, x, y, cell, tile_size)
 
         if not self.window:
             self.window = Window('my_custom_env')
@@ -357,6 +345,29 @@ class SimpleGridEnv(Env):
         if not isinstance(obj, r.Agent):
             self.tile_cache[key] = img
 
+        return img
+
+    def update_cell_in_img(self, img, x, y, cell, tile_size):
+        """
+        Parameters
+        ----------
+        img : np.ndarray
+            Image to update.
+        x : int
+            x-coordinate of the cell to update.
+        y : int
+            y-coordinate of the cell to update.
+        cell : r.WorldObj
+            New cell to render.
+        tile_size : int
+            Size of the cell in pixels.
+        """
+        tile_img = self.render_tile(cell, tile_size=tile_size)
+        height_min = x * tile_size
+        height_max = (x+1) * tile_size
+        width_min = y * tile_size
+        width_max = (y+1) * tile_size
+        img[height_min:height_max, width_min:width_max, :] = tile_img
         return img
 
     def encode(self, vis_mask=None):

@@ -43,6 +43,7 @@ OBJECT_TO_IDX = {
     'goal'          : 8,
     'lava'          : 9,
     'agent'         : 10,
+    'colored_tile'  : 11,
 }
 
 IDX_TO_OBJECT = dict(zip(OBJECT_TO_IDX.values(), OBJECT_TO_IDX.keys()))
@@ -240,8 +241,8 @@ class WorldObj:
 
         if obj_type == 'wall':
             v = Wall(color)
-        elif obj_type == 'goal':
-            v = Goal()
+        elif obj_type == 'colored_tile':
+            v = ColoredTile()
         # elif obj_type == 'floor':
         #     v = Floor(color)
         # elif obj_type == 'ball':
@@ -263,9 +264,9 @@ class WorldObj:
         """Draw this object with the given renderer"""
         raise NotImplementedError
 
-class Goal(WorldObj):
+class ColoredTile(WorldObj):
     def __init__(self, color):
-        super().__init__('goal', color)
+        super().__init__('colored_tile', color)
 
     def can_overlap(self):
         return True
