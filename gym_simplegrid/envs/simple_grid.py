@@ -300,7 +300,7 @@ class SimpleGridEnv(Env):
         img = self.update_cell_in_img(img, x, y, cell, tile_size)
 
         if not self.window:
-            self.window = Window('my_custom_env')
+            self.window = Window()
             self.window.show(block=False)
         self.window.show_img(img, caption, self.fps)
 
