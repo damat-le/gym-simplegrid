@@ -13,7 +13,7 @@ class Window:
     Window to draw a gridworld instance using Matplotlib
     """
 
-    def __init__(self, title):
+    def __init__(self):
         self.fig = None
 
         self.imshow_obj = None
@@ -22,8 +22,7 @@ class Window:
         self.fig, self.ax = plt.subplots()
 
         # Show the env name in the window title
-        #@TODO: Soon, this will be deprecated
-        self.fig.canvas.set_window_title(title)
+        # self.fig.suptitle(title)
         
         # Turn off x/y axis numbering/ticks
         self.ax.xaxis.set_ticks_position('none')
