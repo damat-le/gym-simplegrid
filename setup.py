@@ -13,9 +13,8 @@ setup(
     long_description_content_type="text/markdown",
     packages=['gym_simplegrid', 'gym_simplegrid.envs'],
     install_requires=[
-        'gym>=0.23.0',
-        'numpy>=1.22.0',
-        'matplotlib==3.5.1'
+        'gymnasium>=0.29.0',
+        'matplotlib==3.7.2'
     ],
     python_requires=">=3.7",
     author="Leo D'Amato",
