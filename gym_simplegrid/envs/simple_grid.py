@@ -1,9 +1,8 @@
 from __future__ import annotations
-import random
 import numpy as np
-from gym import spaces, Env
 import gym_simplegrid.rendering as r
 from gym_simplegrid.window import Window
+from gymnasium import spaces, Env
 
 MAPS = {
     "4x4": ["0000", "0101", "0001", "1000"],
@@ -37,6 +36,7 @@ class SimpleGridEnv(Env):
 
     The user can also decide whether the agents disappear when they reach their goal. This can be done by passing a boolean value to `disappear_on_goal`. If `disappear_on_goal` is True, the agent disappears when it reaches its goal. If `disappear_on_goal` is False, the agent remains on the grid after it reaches its goal. This feature is currently not implemented and will be added in future versions.
     """
+    metadata = {"render_modes": ["human"], 'render_fps': 5}
     FREE: int = 0
     OBSTACLE: int = 1
     MOVES: dict[int,tuple] = {
@@ -47,23 +47,14 @@ class SimpleGridEnv(Env):
     }
 
     def __init__(self,     
-        obstacle_map: str | list[str], 
-        start_xy: tuple, 
-        goal_xy: tuple, 
-        agent_color: str = 'yellow', 
-        seed: int | None = None   
+        obstacle_map: str | list[str],
+        render_mode: str | None = None,
     ):
         """
         Initialise the environment.
 
         Parameters
         ----------
-        seed: int | None
-            Random seed.
-        start_xy: tuple
-            Starting (x,y) position of the agent.
-        goals_xy: tuple
-            Goal (x,y) position of the agent.
         agent_color: str
             Color of the agent. The available colors are: red, green, blue, purple, yellow, grey and black. Note that the goal cell will have the same color.
         obstacle_map: str | list[str]
@@ -74,47 +65,88 @@ class SimpleGridEnv(Env):
              "0001",
              "1000"]
         """
-        self.seed = seed        
-        
+
         # Env confinguration
         self.obstacles = self.parse_obstacle_map(obstacle_map) #walls
         self.nrow, self.ncol = self.obstacles.shape
 
-        self.start_xy = start_xy
-        self.goal_xy = goal_xy
-
         self.action_space = spaces.Discrete(len(self.MOVES))
-        self.observation_space = spaces.Discrete(self.nrow * self.ncol)
-
-        # internal vars initialised in reset()
-        self.curr_pos_xy: tuple = None
-        self.curr_reward: float = 0.0
-        self.done: bool = False
-        self.info: dict = dict()
+        self.observation_space = spaces.Box(
+            low=np.array([0, 0], dtype=int), 
+            high=np.array([self.nrow, self.ncol], dtype=int) - 1
+        )
 
         # Rendering configuration
+        self.render_mode = render_mode
         self.window = None
-        self.agent_color = agent_color
+        self.agent_color = 'yellow'
         self.tile_cache = {}
-        self.fps = 10
+        self.fps = self.metadata['render_fps']
 
-    def set_seed(self, seed: int) -> None:
+    def reset(
+            self, 
+            seed: int | None = None, 
+            options: dict = {'start_xy':(0,5), 'goal_xy':(4,7)}
+        ) -> tuple:
         """
-        Seed the environment.
+        Reset the environment.
 
         Parameters
         ----------
-        seed: int
+        seed: int | None
             Random seed.
+        options: dict
+            Optional dict that allows you to define the start (`start_xy` key) and goal (`goal_xy`key) position when resetting. By default start_xy=(0,5) and goal_xy=(4,7), i.e. the agent is initialised in pos (0,5) while the goal is initialised in pos (4,7).
         """
-        np.random.seed(seed)
-        random.seed(seed)
 
-    def integrity_checks(self) -> None:
-        # check that goals do not overlap with walls
-        assert self.obstacles[self.goal_xy] == self.FREE, \
-            f"Goal position {self.goal_xy} overlaps with a wall."
+        # Set seed
+        super().reset(seed=seed)
+
+        # parse options
+        self.start_xy = options['start_xy']
+        self.goal_xy = options['goal_xy']
+
+        # initialise internal vars
+        self.agent_loc_xy = self.start_xy
+        self.reward = self.get_reward(*self.agent_loc_xy)
+        self.done = self.on_goal()
+        self.info = {}
+
+        # Check integrity
+        self.integrity_checks()
+
+        if self.render_mode == "human":
+            self.render()
+
+        return self.agent_loc_xy, self.info
+    
+    def step(self, action: int):
+        """
+        Take a step in the environment.
+        """
+        #assert action in self.action_space
+
+        # Get the current position of the agent
+        row, col = self.agent_loc_xy
+        dx, dy = self.MOVES[action]
+
+        # Compute the target position of the agent
+        target_row = row + dx
+        target_col = col + dy
+
+        # Compute the reward
+        self.reward = self.get_reward(target_row, target_col)
         
+        # Check if the move is valid
+        if self.is_in_bounds(target_row, target_col) and self.is_free(target_row, target_col):
+            self.agent_loc_xy = (target_row, target_col)
+            self.done = self.on_goal()
+
+        if self.render_mode == "human":
+            self.render()
+
+        return self.agent_loc_xy, self.reward, self.done, False, self.info
+    
     def parse_obstacle_map(self, obstacle_map) -> np.ndarray:
         """
         Initialise the grid.
@@ -144,6 +176,15 @@ class SimpleGridEnv(Env):
         else:
             raise ValueError(f"You must provide either a map of obstacles or the name of an existing map. Available existing maps are {', '.join(MAPS.keys())}.")
 
+    def integrity_checks(self) -> None:
+        # check that goals do not overlap with walls
+        assert self.obstacles[self.goal_xy] == self.FREE, \
+            f"Goal position {self.goal_xy} overlaps with a wall."
+        assert self.is_in_bounds(*self.start_xy), \
+            f"Start position {self.start_xy} is out of bounds."
+        assert self.is_in_bounds(*self.goal_xy), \
+            f"Goal position {self.goal_xy} is out of bounds."
+        
     def to_s(self, row: int, col: int) -> int:
         """
         Transform a (row, col) point to a state in the observation space.
@@ -160,7 +201,7 @@ class SimpleGridEnv(Env):
         """
         Check if the agent is on its own goal.
         """
-        return self.curr_pos_xy == self.goal_xy
+        return self.agent_loc_xy == self.goal_xy
 
     def is_free(self, row: int, col: int) -> bool:
         """
@@ -174,57 +215,6 @@ class SimpleGridEnv(Env):
         """
         return 0 <= row < self.nrow and 0 <= col < self.ncol
 
-    def move(self, action: int) -> None:
-        """
-        Move the agent according to the selected action.
-        """
-        #assert action in self.action_space
-
-        # Get the current position of the agent
-        row, col = self.curr_pos_xy
-        dx, dy = self.MOVES[action]
-
-        # Compute the target position of the agent
-        target_row = row + dx
-        target_col = col + dy
-
-        # Compute the reward
-        self.curr_reward = self.get_reward(target_row, target_col)
-        
-        # Check if the move is valid
-        if not self.done and self.is_in_bounds(target_row, target_col) and self.is_free(target_row, target_col):
-            self.curr_pos_xy = (target_row, target_col)
-            self.done = self.on_goal()
-        
-    def step(self, action: int):
-        """
-        Take a step in the environment.
-        """
-        self.move(action)
-        return self.observation()
-    
-    def reset(self) -> tuple:
-        """
-        Reset the environment.
-
-        By deafult, the agents are reset to the starting positions indicated during class initialisation. However, the user can also pass a dict of new starting positions.
-        """
-        # Set seed
-        self.set_seed(self.seed)
-        # Reset agent position
-        self.curr_pos_xy = self.start_xy
-        # Reset reward, done and info
-        self.curr_reward = self.get_reward(*self.curr_pos_xy)
-        self.done = self.on_goal()
-        self.info = {}
-        # Check integrity
-        self.integrity_checks()
-
-        return self.observation()
-    
-    def observation(self) -> tuple:
-        return self.curr_pos_xy, self.curr_reward, self.done, self.info
-
     def get_reward(self, x: int, y: int) -> float:
         """
         Get the reward of a given cell.
@@ -232,7 +222,7 @@ class SimpleGridEnv(Env):
         if not self.is_in_bounds(x, y):
             return -1.0
         elif not self.is_free(x, y):
-            return -5.0
+            return -1.0
         elif (x, y) == self.goal_xy:
             return 1.0
         else:
@@ -295,7 +285,7 @@ class SimpleGridEnv(Env):
         img = self.update_cell_in_img(img, x, y, cell, tile_size)
 
         # Render agent
-        x, y = self.curr_pos_xy
+        x, y = self.agent_loc_xy
         cell = r.Agent(color=self.agent_color)
         img = self.update_cell_in_img(img, x, y, cell, tile_size)
 

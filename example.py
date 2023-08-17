@@ -14,6 +14,7 @@ if __name__=='__main__':
     import logging, os, sys
     from gym_simplegrid.envs import SimpleGridEnv
     from datetime import datetime as dt
+    import gymnasium as gym
 
     # Folder name for the simulation
     FOLDER_NAME = dt.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -29,37 +30,53 @@ if __name__=='__main__':
 
     logger.info("-------------START-------------")
 
-    env = SimpleGridEnv(
-        start_xy=(0, 5),
-        goal_xy=(4, 7),
-        obstacle_map="8x8",
-        seed=42
+    options ={
+        'start_xy': (0, 5),
+        'goal_xy': (3, 6),
+    }
+
+    obstacle_map = [
+        "10001000",
+        "10010000",
+        "00000001",
+        "01000001",
+    ]
+    
+    env = gym.make(
+        'SimpleGrid-v0', 
+        obstacle_map=obstacle_map, 
+        render_mode='human'
     )
-    obs, rew, done, _ = env.reset()
+
+    #env = gym.make('SimpleGrid-8x8-v0', render_mode="human")
+
+    obs, info = env.reset(seed=1, options=options)
+    rew = env.unwrapped.reward
+    done = env.unwrapped.done
 
     logger.info("Running action-perception loop...")
     
     with open(f"log/{FOLDER_NAME}/history.csv", 'w') as f:
         f.write(f"step,x,y,reward,done,action\n")
-
-        frames = []
+        
+        #frames = []
 
         for t in range(500):
-            img = env.render(caption=f"t:{t}, rew:{rew}, pos:{obs}")
-            log_img(t, img)
-            frames.append(img)
-
-            action = env.action_space.sample()
+            #img = env.render(caption=f"t:{t}, rew:{rew}, pos:{obs}")
+            #log_img(t, img)
+            #frames.append(img)
             
+            action = env.action_space.sample()
             f.write(f"{t},{obs[0]},{obs[1]},{rew},{done},{action}\n")
-
+            
             if done:
                 logger.info(f"...agent is done at time step {t}")
                 break
-
-            obs, rew, done, _ = env.step(action)
-
+            
+            obs, rew, done, _, info = env.step(action)
+            
     env.close()
-    create_gif(frames)
+    #frames = env.render()
+    #create_gif(frames)
     logger.info("...done")
     logger.info("-------------END-------------")

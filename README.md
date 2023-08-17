@@ -1,15 +1,13 @@
 # Simple Gridworld Environment for OpenAI Gym
 
-SimpleGrid is a super simple gridworld environment for OpenAI gym. It is easy to use and customise and it is intended to offer an environment for quick testing and prototyping different RL algorithms.
+SimpleGrid is a super simple gridworld environment for [Gymnasium](https://gymnasium.farama.org/). It is easy to use and customise and it is intended to offer an environment for quick testing and prototyping different RL algorithms.
 
-It is also efficient, lightweight and has few dependencies (gym, numpy, matplotlib). 
+It is also efficient, lightweight and has few dependencies (gymnasium, numpy, matplotlib). 
 
 ![](img/simplegrid.gif)
 
 SimpleGrid involves navigating a grid from Start(S) (red tile) to Goal(G) (green tile) without colliding with any Wall(W) (black tiles) by walking over
 the Empty(E) (white tiles) cells. The yellow circle denotes the agent's current position. 
-
-Optionally, it is possible to introduce a noise in the environment that makes the agent move in a random direction that can be different than the desired one.
 
 
 ## Installation
@@ -49,56 +47,52 @@ Please use this bibtex if you want to cite this repository in your publications:
 Basic usage options:
 
 ```python
-import gym 
+import gymnasium
 import gym_simplegrid
 
 # Load the default 8x8 map
-env = gym.make('SimpleGrid-8x8-v0')
+env = gym.make('SimpleGrid-8x8-v0', render_mode='human')
 
 # Load the default 4x4 map
-env = gym.make('SimpleGrid-4x4-v0')
+env = gym.make('SimpleGrid-4x4-v0', render_mode='human')
 
-# Load a random map
-env = gym.make('SimpleGrid-v0')
-
-# Load a custom map with multiple starting states
-# At the beginning of each episode a new starting state will be sampled
-my_desc = [
-        "SEEEEEES",
-        "EEESEEES",
-        "WEEWEEEE",
-        "EEEEEWEG",
+# Load a custom map
+obstacle_map = [
+        "10001000",
+        "10010000",
+        "00000001",
+        "01000001",
     ]
-env = gym.make('SimpleGrid-v0', desc=my_desc)
 
-# Set custom rewards and introduce noise
-# The agent will move in the intended direction with probability 1-p_noise
-my_reward_map = {
-        b'E': -1.0,
-        b'S': -0.0,
-        b'W': -5.0,
-        b'G': 5.0,
-    }
-env = gym.make('SimpleGrid-8x8-v0', reward_map=my_reward_map, p_noise=.4)
+env = gym.make(
+    'SimpleGrid-v0', 
+    obstacle_map=obstacle_map, 
+    render_mode='human'
+)
+
+# Set custom rewards
+Subclass SimpleGridEnv and override the get_reward() method
 ```
 
-Example with rendering:
+Basic example with rendering:
 
 ```python
-import gym 
+import gymnasium
 import gym_simplegrid
 
-env = gym.make('SimpleGrid-8x8-v0')
-observation = env.reset()
-T = 50
-for _ in range(T):
-    action = env.action_space.sample()
-    env.render()
-    observation, reward, done, info = env.step(action)
+env = gym.make('SimpleGrid-8x8-v0', render_mode='human')
+obs, info = env.reset()
+done = env.unwrapped.done
+
+for _ in range(50):
     if done:
-        observation = env.reset()
+        obs, info = env.reset()
+    action = env.action_space.sample()
+    obs, reward, done, _, info = env.step(action)
 env.close()
 ```
+
+For an other example, take a look at the [example script](example.py).
 
 
 ## Environment Description
@@ -107,38 +101,53 @@ env.close()
 
 The action space is `gym.spaces.Discrete(4)`. An action is a `int` number and represents a direction according to the following scheme:
 
-- 0: LEFT
+- 0: UP
 - 1: DOWN
-- 2: RIGHT
-- 3: UP
+- 2: LEFT
+- 3: RIGHT
 
 ### Observation Space
 
-The observation is a value representing the agent's current position as
-`current_row * ncols + current_col` (where both the row and col start at 0).
-For example, the point in position `(2,3)` in a 4x5 map corresponds to state 13 (= 2 * 5 + 3).
+The observation is a tuple (x,y) representing the agent's current position.
 The number of possible observations is dependent on the size of the map.
-For example, the 4x4 map has 16 possible observations.
+For example, the 4x4 map has 16 possible observations. 
+The observation space is encoded as 
+
+```python
+gymnasium.spaces.Box(
+    low=np.array([0, 0], dtype=int), 
+    high=np.array([nrow, ncol], dtype=int) - 1
+)
+```
+where `nrow` and `ncol` are the number of rows and columns of the map respectively.
 
 ### Rewards
 
-It is possible to customize the rewards for each state by passing a custom reward map through the argument `reward_map`.
+Currently, the reward map is defined in the get_reward() method of the SimpleGridEnv class.
 
-The default reward schedule is:
+It is possible to override this method to define custom rewards.
 
-- goal(G): +1
-- wall(W): -1
-- empty(E): 0
-- start(S): 0
+For a given position (x,y), the default reward is defined as follows:
+
+```python 
+def get_reward(self, x: int, y: int) -> float:
+    """
+    Get the reward of a given cell.
+    """
+    if not self.is_in_bounds(x, y):
+        return -1.0
+    elif not self.is_free(x, y):
+        return -1.0
+    elif (x, y) == self.goal_xy:
+        return 1.0
+    else:
+        return 0.0
+```
 
 ## Notes on rendering
 
-The default frame rate is 5 FPS. It is possible to change it through `env.fps` after instantiating the environment.
+The default frame rate is 5 FPS. It is possible to change it through the `metadata` dictionary. 
 
 To properly render the environment, remember that the point (x,y) in the desc matrix corresponds to the point (y,x) in the rendered matrix.
 This is because the rendering code works in terms of width and height while the computation in the environment is done using x and y coordinates.
 You don't have to worry about this unless you play with the environment's internals.
-
-## Version History
-
-v0: Initial versions release (1.0.0)
