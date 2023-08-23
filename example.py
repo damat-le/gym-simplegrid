@@ -1,24 +1,13 @@
-import imageio
-
-# To run this example, you need tabulate or imageio.
-# You can install them with pip:
-# `pip install tabulate imageio`
-
-def log_img(t, frame):
-    imageio.imwrite(f'log/{FOLDER_NAME}/img/{t}.png', frame)
-
-def create_gif(frames):
-    imageio.mimsave(f'log/{FOLDER_NAME}/movie.gif', frames)
-
 if __name__=='__main__':
     import logging, os, sys
     from gym_simplegrid.envs import SimpleGridEnv
     from datetime import datetime as dt
     import gymnasium as gym
+    from gymnasium.utils.save_video import save_video
 
     # Folder name for the simulation
     FOLDER_NAME = dt.now().strftime('%Y-%m-%d %H:%M:%S')
-    os.makedirs(f"log/{FOLDER_NAME}/img")
+    os.makedirs(f"log/{FOLDER_NAME}")
 
     # Logger to have feedback on the console and on a file
     logging.basicConfig(
@@ -31,7 +20,7 @@ if __name__=='__main__':
     logger.info("-------------START-------------")
 
     options ={
-        'start_loc': 2,
+        'start_loc': 12,
         # goal_loc is not specified, so it will be randomly sampled
     }
 
@@ -45,10 +34,8 @@ if __name__=='__main__':
     env = gym.make(
         'SimpleGrid-v0', 
         obstacle_map=obstacle_map, 
-        render_mode='human'
+        render_mode='rgb_array_list'
     )
-
-    #env = gym.make('SimpleGrid-8x8-v0', render_mode="human")
 
     obs, info = env.reset(seed=1, options=options)
     rew = env.unwrapped.reward
@@ -59,12 +46,8 @@ if __name__=='__main__':
     with open(f"log/{FOLDER_NAME}/history.csv", 'w') as f:
         f.write(f"step,x,y,reward,done,action\n")
         
-        #frames = []
-
         for t in range(500):
             #img = env.render(caption=f"t:{t}, rew:{rew}, pos:{obs}")
-            #log_img(t, img)
-            #frames.append(img)
             
             action = env.action_space.sample()
             f.write(f"{t},{info['agent_xy'][0]},{info['agent_xy'][1]},{rew},{done},{action}\n")
@@ -76,7 +59,8 @@ if __name__=='__main__':
             obs, rew, done, _, info = env.step(action)
             
     env.close()
-    #frames = env.render()
-    #create_gif(frames)
+    if env.render_mode == 'rgb_array_list':
+        frames = env.render()
+        save_video(frames, f"log/{FOLDER_NAME}", fps=env.fps)
     logger.info("...done")
     logger.info("-------------END-------------")
