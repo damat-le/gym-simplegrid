@@ -6,15 +6,15 @@ with open("README.md", "r") as fh:
 setup(
     name='gym_simplegrid',
     version='1.0.3',
-    keywords='reinforcement learning, environment, gridworld, agent, rl, openaigym, openai-gym, gym',
+    keywords='reinforcement learning, environment, gridworld, agent, rl, openaigym, openai-gym, gym, gymnasium, farama-foundation',
     url='https://github.com/damat-le/gym-simplegrid',
-    description='Simple Gridworld Environment for OpenAI Gym',
+    description='Simple Gridworld Environment for Gymnasium',
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=['gym_simplegrid', 'gym_simplegrid.envs'],
     install_requires=[
-        'gymnasium>=0.29.0',
-        'matplotlib==3.7.2'
+        'gymnasium',
+        'matplotlib'
     ],
     python_requires=">=3.7",
     author="Leo D'Amato",
