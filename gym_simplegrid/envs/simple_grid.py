@@ -267,19 +267,20 @@ class SimpleGridEnv(Env):
             self.window.close()
         return None
 
-    def render(self, caption=None):
+    def render(self):
         """
         Render the environment.
         """
         if self.render_mode == "human":
-            img = self.render_frame(caption=caption)
+            img = self.render_frame()
             if not self.window:
                 self.window = Window()
                 self.window.show(block=False)
+            caption = ''
             self.window.show_img(img, caption, self.fps)
             return None
         elif self.render_mode == "rgb_array":
-            return self.render_frame(caption=caption)
+            return self.render_frame()
         # elif mode == "rgb_array_list":
         #     img = self.render_frame(caption=caption)
         #     self.frames.append(img)
@@ -287,7 +288,7 @@ class SimpleGridEnv(Env):
         else:
             raise ValueError(f"Unsupported rendering mode {self.render_mode}")
     
-    def render_frame(self, caption, tile_size=r.TILE_PIXELS, highlight_mask=None):
+    def render_frame(self, tile_size=r.TILE_PIXELS, highlight_mask=None):
         """
         @NOTE: Once again, if agent position is (x,y) then, to properly 
         render it, we have to pass (y,x) to the grid.render method.
