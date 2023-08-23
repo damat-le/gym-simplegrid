@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='gym_simplegrid',
-    version='1.0.4',
+    version='1.0.5',
     keywords='reinforcement learning, environment, gridworld, agent, rl, openaigym, openai-gym, gym, gymnasium, farama-foundation',
     url='https://github.com/damat-le/gym-simplegrid',
     description='Simple Gridworld Environment for Gymnasium',
