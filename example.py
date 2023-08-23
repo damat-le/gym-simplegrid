@@ -1,3 +1,5 @@
+# NOTE: to run this you must install additional dependencies
+
 if __name__=='__main__':
     import logging, os, sys
     from gym_simplegrid.envs import SimpleGridEnv
