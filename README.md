@@ -46,7 +46,7 @@ Please use this bibtex if you want to cite this repository in your publications:
 Basic usage options:
 
 ```python
-import gymnasium
+import gymnasium as gym
 import gym_simplegrid
 
 # Load the default 8x8 map
