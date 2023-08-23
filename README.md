@@ -78,7 +78,7 @@ obs, info = env.reset(options={'start_loc':0, 'goal_loc':63})
 Basic example with rendering:
 
 ```python
-import gymnasium
+import gymnasium as gym
 import gym_simplegrid
 
 env = gym.make('SimpleGrid-8x8-v0', render_mode='human')
