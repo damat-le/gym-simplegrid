@@ -35,7 +35,7 @@ class SimpleGridEnv(Env):
      
     The user can also decide the starting and goal positions of the agent. This can be done by through the `options` dictionary in the `reset` method. The user can specify the starting and goal positions by adding the key-value pairs(`starts_xy`, v1) and `goals_xy`, v2), where v1 and v2 are both of type int (s) or tuple (x,y) and represent the agent starting and goal positions respectively. 
     """
-    metadata = {"render_modes": ["human"], 'render_fps': 5}
+    metadata = {"render_modes": ["human", "rgb_array"], 'render_fps': 5}
     FREE: int = 0
     OBSTACLE: int = 1
     MOVES: dict[int,tuple] = {
@@ -78,6 +78,7 @@ class SimpleGridEnv(Env):
         self.agent_color = 'yellow'
         self.tile_cache = {}
         self.fps = self.metadata['render_fps']
+        #self.frames = []
 
     def reset(
             self, 
@@ -110,8 +111,8 @@ class SimpleGridEnv(Env):
         # Check integrity
         self.integrity_checks()
 
-        if self.render_mode == "human":
-            self.render()
+        #if self.render_mode == "human":
+        self.render()
 
         return self.get_obs(), self.get_info()
     
@@ -137,8 +138,8 @@ class SimpleGridEnv(Env):
             self.agent_xy = (target_row, target_col)
             self.done = self.on_goal()
 
-        if self.render_mode == "human":
-            self.render()
+        # if self.render_mode == "human":
+        self.render()
 
         return self.get_obs(), self.reward, self.done, False, self.get_info()
     
@@ -266,16 +267,27 @@ class SimpleGridEnv(Env):
             self.window.close()
         return None
 
-    def render(self, caption=None, mode='human'):
+    def render(self, caption=None):
         """
         Render the environment.
         """
-        if mode == "human":
-            return self.render_gui(caption=caption)
+        if self.render_mode == "human":
+            img = self.render_frame(caption=caption)
+            if not self.window:
+                self.window = Window()
+                self.window.show(block=False)
+            self.window.show_img(img, caption, self.fps)
+            return None
+        elif self.render_mode == "rgb_array":
+            return self.render_frame(caption=caption)
+        # elif mode == "rgb_array_list":
+        #     img = self.render_frame(caption=caption)
+        #     self.frames.append(img)
+        #     return self.frames
         else:
-            raise ValueError(f"Unsupported rendering mode {mode}")
+            raise ValueError(f"Unsupported rendering mode {self.render_mode}")
     
-    def render_gui(self, caption, tile_size=r.TILE_PIXELS, highlight_mask=None):
+    def render_frame(self, caption, tile_size=r.TILE_PIXELS, highlight_mask=None):
         """
         @NOTE: Once again, if agent position is (x,y) then, to properly 
         render it, we have to pass (y,x) to the grid.render method.
@@ -302,31 +314,26 @@ class SimpleGridEnv(Env):
                 else:
                     cell = None
 
-                img = self.update_cell_in_img(img, x, y, cell, tile_size)
+                img = self.update_cell_in_frame(img, x, y, cell, tile_size)
 
         # Render start
         x, y = self.start_xy
         cell = r.ColoredTile(color="red")
-        img = self.update_cell_in_img(img, x, y, cell, tile_size)
+        img = self.update_cell_in_frame(img, x, y, cell, tile_size)
 
         # Render goal
         x, y = self.goal_xy
         cell = r.ColoredTile(color="green")
-        img = self.update_cell_in_img(img, x, y, cell, tile_size)
+        img = self.update_cell_in_frame(img, x, y, cell, tile_size)
 
         # Render agent
         x, y = self.agent_xy
         cell = r.Agent(color=self.agent_color)
-        img = self.update_cell_in_img(img, x, y, cell, tile_size)
-
-        if not self.window:
-            self.window = Window()
-            self.window.show(block=False)
-        self.window.show_img(img, caption, self.fps)
+        img = self.update_cell_in_frame(img, x, y, cell, tile_size)
 
         return img
         
-    def render_tile(
+    def render_cell(
         self,
         obj: r.WorldObj,
         highlight=False,
@@ -367,7 +374,7 @@ class SimpleGridEnv(Env):
 
         return img
 
-    def update_cell_in_img(self, img, x, y, cell, tile_size):
+    def update_cell_in_frame(self, img, x, y, cell, tile_size):
         """
         Parameters
         ----------
@@ -382,7 +389,7 @@ class SimpleGridEnv(Env):
         tile_size : int
             Size of the cell in pixels.
         """
-        tile_img = self.render_tile(cell, tile_size=tile_size)
+        tile_img = self.render_cell(cell, tile_size=tile_size)
         height_min = x * tile_size
         height_max = (x+1) * tile_size
         width_min = y * tile_size

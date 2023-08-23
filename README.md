@@ -72,7 +72,7 @@ env = gym.make(
 # Use the options dict in the reset method
 # This initialises the agent in location (0,0) and the goal in location (7,7)
 env = gym.make('SimpleGrid-8x8-v0', render_mode='human')
-env.reset(options={'start_loc':0, 'goal_loc':63})
+obs, info = env.reset(options={'start_loc':0, 'goal_loc':63})
 ```
 
 Basic example with rendering:
