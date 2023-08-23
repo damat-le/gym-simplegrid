@@ -1,4 +1,4 @@
-# Simple Gridworld Environment for OpenAI Gym
+# Simple Gridworld Gymnasium Environment
 
 SimpleGrid is a super simple gridworld environment for [Gymnasium](https://gymnasium.farama.org/). It is easy to use and customise and it is intended to offer an environment for quickly testing and prototyping different RL algorithms.
 
