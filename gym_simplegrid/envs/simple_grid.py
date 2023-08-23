@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 import numpy as np
 import gym_simplegrid.rendering as r
 from gym_simplegrid.window import Window
@@ -22,19 +23,17 @@ class SimpleGridEnv(Env):
     """
     Simple Grid Environment
 
-    The environment is a grid with obstacles (walls) and agents. The agents can move in one of the four cardinal directions. If they try to move over an obstacle or out of the grid bounds, they stay in place. Each agent has a unique color and a goal state of the same color. The environment is episodic, i.e. the episode ends when all agents reach their goals.
+    The environment is a grid with obstacles (walls) and agents. The agents can move in one of the four cardinal directions. If they try to move over an obstacle or out of the grid bounds, they stay in place. Each agent has a unique color and a goal state of the same color. The environment is episodic, i.e. the episode ends when the agents reaches its goal.
 
-    To initialise the grid, the user must decide where to put the walls on the grid. This can bee done by either selecting an existing map or by passing a custom map. To load an existing map, the name of the map must be passed to the `obstacle_map` argument. Available pre-existing map names are "4x4" and "8x8". Conversely, if to load custom map, the user must provide a map correctly formatted. The map must be passed as a list of strings, where each string denotes a row of the grid and it is composed by a sequence of 0s and 1s, where 0 denotes a free cell and 1 denotes a wall cell. An example of a 4x4 map is the following:
+    To initialise the grid, the user must decide where to put the walls on the grid. This can be done by either selecting an existing map or by passing a custom map. To load an existing map, the name of the map must be passed to the `obstacle_map` argument. Available pre-existing map names are "4x4" and "8x8". Conversely, if to load custom map, the user must provide a map correctly formatted. The map must be passed as a list of strings, where each string denotes a row of the grid and it is composed by a sequence of 0s and 1s, where 0 denotes a free cell and 1 denotes a wall cell. An example of a 4x4 map is the following:
     ["0000", 
      "0101", 
      "0001", 
      "1000"]
 
-    The user must also decide the number of agents and their starting and goal positions on the grid. This can be done by passing two lists of tuples, namely `starts_xy` and `goals_xy`, where each tuple is a pair of coordinates (x, y) representing the agent starting/goal position. 
-
-    Currently, the user must also define the color of each agent. This can be done by passing a list of strings, where each string is a color name. The available color names are: red, green, blue, purple, yellow, grey and black. This requirement will be removed in the future and the color will be assigned automatically.
-
-    The user can also decide whether the agents disappear when they reach their goal. This can be done by passing a boolean value to `disappear_on_goal`. If `disappear_on_goal` is True, the agent disappears when it reaches its goal. If `disappear_on_goal` is False, the agent remains on the grid after it reaches its goal. This feature is currently not implemented and will be added in future versions.
+    Assume the environment is a grid of size (nrow, ncol). A state s of the environment is an elemente of gym.spaces.Discete(nrow*ncol), i.e. an integer between 0 and nrow * ncol - 1. Assume nrow=ncol=5 and s=10, to compute the (x,y) coordinates of s on the grid the following formula are used: x = s // ncol  and y = s % ncol.
+     
+    The user can also decide the starting and goal positions of the agent. This can be done by through the `options` dictionary in the `reset` method. The user can specify the starting and goal positions by adding the key-value pairs(`starts_xy`, v1) and `goals_xy`, v2), where v1 and v2 are both of type int (s) or tuple (x,y) and represent the agent starting and goal positions respectively. 
     """
     metadata = {"render_modes": ["human"], 'render_fps': 5}
     FREE: int = 0
@@ -71,10 +70,7 @@ class SimpleGridEnv(Env):
         self.nrow, self.ncol = self.obstacles.shape
 
         self.action_space = spaces.Discrete(len(self.MOVES))
-        self.observation_space = spaces.Box(
-            low=np.array([0, 0], dtype=int), 
-            high=np.array([self.nrow, self.ncol], dtype=int) - 1
-        )
+        self.observation_space = spaces.Discrete(n=self.nrow*self.ncol)
 
         # Rendering configuration
         self.render_mode = render_mode
@@ -86,7 +82,7 @@ class SimpleGridEnv(Env):
     def reset(
             self, 
             seed: int | None = None, 
-            options: dict = {'start_xy':(0,5), 'goal_xy':(4,7)}
+            options: dict = dict()
         ) -> tuple:
         """
         Reset the environment.
@@ -96,21 +92,20 @@ class SimpleGridEnv(Env):
         seed: int | None
             Random seed.
         options: dict
-            Optional dict that allows you to define the start (`start_xy` key) and goal (`goal_xy`key) position when resetting. By default start_xy=(0,5) and goal_xy=(4,7), i.e. the agent is initialised in pos (0,5) while the goal is initialised in pos (4,7).
+            Optional dict that allows you to define the start (`start_loc` key) and goal (`goal_loc`key) position when resetting the env. By default options={}, i.e. no preference is expressed for the start and goal states and they are randomly sampled.
         """
 
         # Set seed
         super().reset(seed=seed)
 
         # parse options
-        self.start_xy = options['start_xy']
-        self.goal_xy = options['goal_xy']
+        self.start_xy = self.parse_state_option('start_loc', options)
+        self.goal_xy = self.parse_state_option('goal_loc', options)
 
         # initialise internal vars
-        self.agent_loc_xy = self.start_xy
-        self.reward = self.get_reward(*self.agent_loc_xy)
+        self.agent_xy = self.start_xy
+        self.reward = self.get_reward(*self.agent_xy)
         self.done = self.on_goal()
-        self.info = {}
 
         # Check integrity
         self.integrity_checks()
@@ -118,7 +113,7 @@ class SimpleGridEnv(Env):
         if self.render_mode == "human":
             self.render()
 
-        return self.agent_loc_xy, self.info
+        return self.get_obs(), self.get_info()
     
     def step(self, action: int):
         """
@@ -127,7 +122,7 @@ class SimpleGridEnv(Env):
         #assert action in self.action_space
 
         # Get the current position of the agent
-        row, col = self.agent_loc_xy
+        row, col = self.agent_xy
         dx, dy = self.MOVES[action]
 
         # Compute the target position of the agent
@@ -139,13 +134,13 @@ class SimpleGridEnv(Env):
         
         # Check if the move is valid
         if self.is_in_bounds(target_row, target_col) and self.is_free(target_row, target_col):
-            self.agent_loc_xy = (target_row, target_col)
+            self.agent_xy = (target_row, target_col)
             self.done = self.on_goal()
 
         if self.render_mode == "human":
             self.render()
 
-        return self.agent_loc_xy, self.reward, self.done, False, self.info
+        return self.get_obs(), self.reward, self.done, False, self.get_info()
     
     def parse_obstacle_map(self, obstacle_map) -> np.ndarray:
         """
@@ -175,9 +170,38 @@ class SimpleGridEnv(Env):
             return map_int
         else:
             raise ValueError(f"You must provide either a map of obstacles or the name of an existing map. Available existing maps are {', '.join(MAPS.keys())}.")
+        
+    def parse_state_option(self, state_name: str, options: dict) -> tuple:
+        """
+        parse the value of an option of type state from the dictionary of options usually passed to the reset method. Such value denotes a position on the map and it must be an int or a tuple.
+        """
+        try:
+            state = options[state_name]
+            if isinstance(state, int):
+                return self.to_xy(state)
+            elif isinstance(state, tuple):
+                return state
+            else:
+                raise TypeError(f'Allowed types for `{state_name}` are int or tuple.')
+        except KeyError:
+            state = self.sample_valid_state_xy()
+            logger = logging.getLogger()
+            logger.info(f'Key `{state_name}` not found in `options`. Random sampling a valid value for it:')
+            logger.info(f'...`{state_name}` has value: {state}')
+            return state
 
+    def sample_valid_state_xy(self) -> tuple:
+        state = self.observation_space.sample()
+        pos_xy = self.to_xy(state)
+        while not self.is_free(*pos_xy):
+            state = self.observation_space.sample()
+            pos_xy = self.to_xy(state)
+        return pos_xy
+    
     def integrity_checks(self) -> None:
         # check that goals do not overlap with walls
+        assert self.obstacles[self.start_xy] == self.FREE, \
+            f"Start position {self.start_xy} overlaps with a wall."
         assert self.obstacles[self.goal_xy] == self.FREE, \
             f"Goal position {self.goal_xy} overlaps with a wall."
         assert self.is_in_bounds(*self.start_xy), \
@@ -201,7 +225,7 @@ class SimpleGridEnv(Env):
         """
         Check if the agent is on its own goal.
         """
-        return self.agent_loc_xy == self.goal_xy
+        return self.agent_xy == self.goal_xy
 
     def is_free(self, row: int, col: int) -> bool:
         """
@@ -227,6 +251,12 @@ class SimpleGridEnv(Env):
             return 1.0
         else:
             return 0.0
+
+    def get_obs(self) -> int:
+        return self.to_s(*self.agent_xy)
+    
+    def get_info(self) -> dict:
+        return {'agent_xy': self.agent_xy}
 
     def close(self):
         """
@@ -285,7 +315,7 @@ class SimpleGridEnv(Env):
         img = self.update_cell_in_img(img, x, y, cell, tile_size)
 
         # Render agent
-        x, y = self.agent_loc_xy
+        x, y = self.agent_xy
         cell = r.Agent(color=self.agent_color)
         img = self.update_cell_in_img(img, x, y, cell, tile_size)
 

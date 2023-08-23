@@ -31,8 +31,8 @@ if __name__=='__main__':
     logger.info("-------------START-------------")
 
     options ={
-        'start_xy': (0, 5),
-        'goal_xy': (3, 6),
+        'start_loc': 2,
+        # goal_loc is not specified, so it will be randomly sampled
     }
 
     obstacle_map = [
@@ -67,7 +67,7 @@ if __name__=='__main__':
             #frames.append(img)
             
             action = env.action_space.sample()
-            f.write(f"{t},{obs[0]},{obs[1]},{rew},{done},{action}\n")
+            f.write(f"{t},{info['agent_xy'][0]},{info['agent_xy'][1]},{rew},{done},{action}\n")
             
             if done:
                 logger.info(f"...agent is done at time step {t}")

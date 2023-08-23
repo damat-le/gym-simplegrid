@@ -1,13 +1,12 @@
 # Simple Gridworld Environment for OpenAI Gym
 
-SimpleGrid is a super simple gridworld environment for [Gymnasium](https://gymnasium.farama.org/). It is easy to use and customise and it is intended to offer an environment for quick testing and prototyping different RL algorithms.
+SimpleGrid is a super simple gridworld environment for [Gymnasium](https://gymnasium.farama.org/). It is easy to use and customise and it is intended to offer an environment for quickly testing and prototyping different RL algorithms.
 
 It is also efficient, lightweight and has few dependencies (gymnasium, numpy, matplotlib). 
 
 ![](img/simplegrid.gif)
 
-SimpleGrid involves navigating a grid from Start(S) (red tile) to Goal(G) (green tile) without colliding with any Wall(W) (black tiles) by walking over
-the Empty(E) (white tiles) cells. The yellow circle denotes the agent's current position. 
+SimpleGrid involves navigating a grid from a Start (red tile) to a Goal (green tile) state without colliding with any Wall (black tiles) by walking over the Empty (white tiles) cells. The yellow circle denotes the agent's current position. 
 
 
 ## Installation
@@ -70,8 +69,10 @@ env = gym.make(
     render_mode='human'
 )
 
-# Set custom rewards
-Subclass SimpleGridEnv and override the get_reward() method
+# Use the options dict in the reset method
+# This initialises the agent in location (0,0) and the goal in location (7,7)
+env = gym.make('SimpleGrid-8x8-v0', render_mode='human')
+env.reset(options={'start_loc':0, 'goal_loc':63})
 ```
 
 Basic example with rendering:
@@ -86,7 +87,7 @@ done = env.unwrapped.done
 
 for _ in range(50):
     if done:
-        obs, info = env.reset()
+        break
     action = env.action_space.sample()
     obs, reward, done, _, info = env.step(action)
 env.close()
@@ -99,7 +100,7 @@ For an other example, take a look at the [example script](example.py).
 
 ### Action Space
 
-The action space is `gym.spaces.Discrete(4)`. An action is a `int` number and represents a direction according to the following scheme:
+The action space is `gymnasium.spaces.Discrete(4)`. An action is a `int` number and represents a direction according to the following scheme:
 
 - 0: UP
 - 1: DOWN
@@ -108,26 +109,34 @@ The action space is `gym.spaces.Discrete(4)`. An action is a `int` number and re
 
 ### Observation Space
 
-The observation is a tuple (x,y) representing the agent's current position.
-The number of possible observations is dependent on the size of the map.
-For example, the 4x4 map has 16 possible observations. 
-The observation space is encoded as 
+Assume to have an environment of size `(nrow, ncol)`, then the observation space is `gymnasium.spaces.Discrete(nrow * ncol)`. Hence, an observation is an integer from `0` to `nrow * ncol - 1` and represents the agent's current position. We can convert an observation `s` to a tuple `(x,y)` using the following formulae:
 
 ```python
-gymnasium.spaces.Box(
-    low=np.array([0, 0], dtype=int), 
-    high=np.array([nrow, ncol], dtype=int) - 1
-)
+ x = s // ncol # integer division
+ y = s % ncol  # modulo operation
 ```
-where `nrow` and `ncol` are the number of rows and columns of the map respectively.
+
+For example: let `nrow=4`, `ncol=5` and let `s=11`. Then `x=11//5=2` and `y=10%5=1`.
+
+Viceversa, we can convert a tuple `(x,y)` to an observation `s` using the following formulae:
+
+```python
+s = x * ncol + y
+```
+
+For example: let `nrow=4`, `ncol=5` and let `x=2`, `y=1`. Then `s=2*5+1=11`.
+
+### Environment Dynamics
+
+In the current implementation, the episodes terminates only when the agent reaches the goal state. In case the agent takes a non-valid action (e.g. it tries to walk over a wall or exit the grid), the agent stays in the same position and receives a negative reward.
+
+It is possible to subclass the `SimpleGridEnv` class  and to override the `step()` method to define custom dynamics (e.g. truncate the episode if the agent takes a non-valid action).
 
 ### Rewards
 
-Currently, the reward map is defined in the get_reward() method of the SimpleGridEnv class.
+Currently, the reward map is defined in the `get_reward()` method of the `SimpleGridEnv` class.
 
-It is possible to override this method to define custom rewards.
-
-For a given position (x,y), the default reward is defined as follows:
+For a given position `(x,y)`, the default reward function is defined as follows:
 
 ```python 
 def get_reward(self, x: int, y: int) -> float:
@@ -135,14 +144,20 @@ def get_reward(self, x: int, y: int) -> float:
     Get the reward of a given cell.
     """
     if not self.is_in_bounds(x, y):
+        # if the agent tries to exit the grid, it receives a negative reward
         return -1.0
     elif not self.is_free(x, y):
+        # if the agent tries to walk over a wall, it receives a negative reward
         return -1.0
     elif (x, y) == self.goal_xy:
+        # if the agent reaches the goal, it receives a positive reward
         return 1.0
     else:
+        # otherwise, it receives no reward
         return 0.0
 ```
+
+It is possible to subclass the `SimpleGridEnv` class  and to override this method to define custom rewards.
 
 ## Notes on rendering
 
