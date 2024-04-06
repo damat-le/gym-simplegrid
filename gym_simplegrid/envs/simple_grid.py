@@ -1,9 +1,10 @@
 from __future__ import annotations
 import logging
 import numpy as np
-import gym_simplegrid.rendering as r
-from gym_simplegrid.window import Window
 from gymnasium import spaces, Env
+import matplotlib.pyplot as plt
+import matplotlib as mlib
+import sys
 
 MAPS = {
     "4x4": ["0000", "0101", "0001", "1000"],
@@ -35,7 +36,7 @@ class SimpleGridEnv(Env):
      
     The user can also decide the starting and goal positions of the agent. This can be done by through the `options` dictionary in the `reset` method. The user can specify the starting and goal positions by adding the key-value pairs(`starts_xy`, v1) and `goals_xy`, v2), where v1 and v2 are both of type int (s) or tuple (x,y) and represent the agent starting and goal positions respectively. 
     """
-    metadata = {"render_modes": ["human", "rgb_array"], 'render_fps': 5}
+    metadata = {"render_modes": ["human", "rgb_array"], 'render_fps': 10}
     FREE: int = 0
     OBSTACLE: int = 1
     MOVES: dict[int,tuple] = {
@@ -73,10 +74,9 @@ class SimpleGridEnv(Env):
         self.observation_space = spaces.Discrete(n=self.nrow*self.ncol)
 
         # Rendering configuration
+        self.fig = None
+
         self.render_mode = render_mode
-        self.window = None
-        self.agent_color = 'yellow'
-        self.tile_cache = {}
         self.fps = self.metadata['render_fps']
         #self.frames = []
 
@@ -105,6 +105,7 @@ class SimpleGridEnv(Env):
 
         # initialise internal vars
         self.agent_xy = self.start_xy
+        self.previous_agent_xy = self.agent_xy
         self.reward = self.get_reward(*self.agent_xy)
         self.done = self.on_goal()
 
@@ -259,25 +260,16 @@ class SimpleGridEnv(Env):
     def get_info(self) -> dict:
         return {'agent_xy': self.agent_xy}
 
-    def close(self):
-        """
-        Close the environment.
-        """
-        if self.window:
-            self.window.close()
-        return None
-
     def render(self):
         """
         Render the environment.
         """
-        if self.render_mode == "human":
-            img = self.render_frame()
-            if not self.window:
-                self.window = Window()
-                self.window.show(block=False)
-            caption = ''
-            self.window.show_img(img, caption, self.fps)
+        if self.render_mode == "human": 
+            if self.fig is None:
+                self.render_initial_frame()
+            else:
+                self.render_agent()
+            plt.pause(1/self.fps)
             return None
         elif self.render_mode == "rgb_array":
             return self.render_frame()
@@ -288,162 +280,94 @@ class SimpleGridEnv(Env):
         else:
             raise ValueError(f"Unsupported rendering mode {self.render_mode}")
     
-    def render_frame(self, tile_size=r.TILE_PIXELS, highlight_mask=None):
+    def render_agent(self):
         """
         @NOTE: Once again, if agent position is (x,y) then, to properly 
         render it, we have to pass (y,x) to the grid.render method.
-
-        tile_size: tile size in pixels
         """
-        width = self.ncol
-        height = self.nrow
-
-        if highlight_mask is None:
-            highlight_mask = np.zeros(shape=(width, height), dtype=bool)
-
-        # Compute the total grid size
-        width_px = width * tile_size
-        height_px = height * tile_size
-
-        img = np.zeros(shape=(height_px, width_px, 3), dtype=np.uint8)
-
-        # Render grid with obstacles
-        for x in range(self.nrow):
-            for y in range(self.ncol):
-                if self.obstacles[x,y] == self.OBSTACLE:
-                    cell = r.Wall(color='black')
-                else:
-                    cell = None
-
-                img = self.update_cell_in_frame(img, x, y, cell, tile_size)
-
-        # Render start
-        x, y = self.start_xy
-        cell = r.ColoredTile(color="red")
-        img = self.update_cell_in_frame(img, x, y, cell, tile_size)
-
-        # Render goal
-        x, y = self.goal_xy
-        cell = r.ColoredTile(color="green")
-        img = self.update_cell_in_frame(img, x, y, cell, tile_size)
-
-        # Render agent
-        x, y = self.agent_xy
-        cell = r.Agent(color=self.agent_color)
-        img = self.update_cell_in_frame(img, x, y, cell, tile_size)
-
-        return img
         
-    def render_cell(
-        self,
-        obj: r.WorldObj,
-        highlight=False,
-        tile_size=r.TILE_PIXELS,
-        subdivs=3
-    ):
+        self.render_white_patch(*self.previous_agent_xy)
+
+        # Add agent
+        self.ax.plot(
+            self.agent_xy[1]+.5, 
+            self.agent_xy[0]+.5,
+            'o', 
+            ms=25, 
+            color='orange', 
+            markeredgecolor='black', 
+            linewidth=2
+        )
+        self.previous_agent_xy = self.agent_xy
+
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+
+        return None
+    
+    def render_initial_frame(self):
         """
-        Render a tile and cache the result
+        Render the initial frame.
         """
+        data = self.obstacles.copy()
+        data[self.start_xy] = 2
+        data[self.goal_xy] = 3
 
-        # Hash map lookup key for the cache
-        if not isinstance(obj, r.Agent):
-            key = (None, highlight, tile_size)
-            key = obj.encode() + key if obj else key
+        colors = ['white', 'black', 'red', 'green']
+        bounds=[i-0.1 for i in [0, 1, 2, 3, 4]]
 
-            if key in self.tile_cache:
-                return self.tile_cache[key]
+        # create discrete colormap
+        cmap = mlib.colors.ListedColormap(colors)
+        norm = mlib.colors.BoundaryNorm(bounds, cmap.N)
 
-        img = np.zeros(shape=(tile_size * subdivs, tile_size * subdivs, 3), dtype=np.uint8) + 255
+        plt.ion()
+        fig, ax = plt.subplots()
+        self.fig = fig
+        self.ax = ax
 
-        if obj != None:
-            obj.render(img)
+        #ax.grid(axis='both', color='#D3D3D3', linewidth=2) 
+        ax.grid(axis='both', color='k', linewidth=1.3) 
+        ax.set_xticks(np.arange(0, data.shape[1], 1))  # correct grid sizes
+        ax.set_yticks(np.arange(0, data.shape[0], 1))
+        ax.tick_params(
+            bottom=False, 
+            top=False, 
+            left=False, 
+            right=False, 
+            labelbottom=False, 
+            labelleft=False
+        ) 
 
-        # Highlight the cell if needed
-        if highlight:
-            r.highlight_img(img)
+        # draw the grid
+        ax.imshow(
+            data, 
+            cmap=cmap, 
+            norm=norm,
+            extent=[0, data.shape[1], data.shape[0], 0]
+        )
 
-        # Draw the grid lines (top and left edges)
-        r.fill_coords(img, r.point_in_rect(0, 0.031, 0, 1), (170, 170, 170))
-        r.fill_coords(img, r.point_in_rect(0, 1, 0, 0.031), (170, 170, 170))
+        for pos in [self.start_xy, self.goal_xy]:
+            self.render_white_patch(*pos)
 
-        # Downsample the image to perform supersampling/anti-aliasing
-        img = r.downsample(img, subdivs)
+        self.fig.canvas.mpl_connect('close_event', self.close)
 
-        # Cache the rendered tile
-        if not isinstance(obj, r.Agent):
-            self.tile_cache[key] = img
+        return None
 
-        return img
+    def render_white_patch(self, x, y):
+        # remove agent with a white patch
+        self.ax.plot(
+            y+.5, 
+            x+.5,
+            'o', 
+            ms=28, 
+            color='white', 
+            markeredgecolor='white', 
+            linewidth=2
+        )
 
-    def update_cell_in_frame(self, img, x, y, cell, tile_size):
+    def close(self, *args):
         """
-        Parameters
-        ----------
-        img : np.ndarray
-            Image to update.
-        x : int
-            x-coordinate of the cell to update.
-        y : int
-            y-coordinate of the cell to update.
-        cell : r.WorldObj
-            New cell to render.
-        tile_size : int
-            Size of the cell in pixels.
+        Close the environment.
         """
-        tile_img = self.render_cell(cell, tile_size=tile_size)
-        height_min = x * tile_size
-        height_max = (x+1) * tile_size
-        width_min = y * tile_size
-        width_max = (y+1) * tile_size
-        img[height_min:height_max, width_min:width_max, :] = tile_img
-        return img
-
-    def encode(self, vis_mask=None):
-        """
-        Produce a compact numpy encoding of the grid
-        """
-    #     width = self.ncol
-    #     height = self.nrow
-
-    #     if vis_mask is None:
-    #         vis_mask = np.ones((width, height), dtype=bool)
-
-    #     array = np.zeros((width, height, 3), dtype='uint8')
-
-    #     for i in range(width):
-    #         for j in range(height):
-    #             if vis_mask[i, j]:
-    #                 v = self.get(i, j)
-
-    #                 if v is None:
-    #                     array[i, j, 0] = r.OBJECT_TO_IDX['empty']
-    #                     array[i, j, 1] = 0
-    #                     array[i, j, 2] = 0
-
-    #                 else:
-    #                     array[i, j, :] = v.encode()
-
-    #     return array
-        pass
-
-    @staticmethod
-    def decode(array):
-        """
-        Decode an array grid encoding back into a grid
-        """
-
-    #     width, height, channels = array.shape
-    #     assert channels == 3
-
-    #     vis_mask = np.ones(shape=(width, height), dtype=bool)
-
-    #     grid = SimpleGrid(width, height)
-    #     for i in range(width):
-    #         for j in range(height):
-    #             type_idx, color_idx, state = array[i, j]
-    #             v = WorldObj.decode(type_idx, color_idx, state)
-    #             grid.set(i, j, v)
-    #             vis_mask[i, j] = (type_idx != OBJECT_TO_IDX['unseen'])
-
-    #     return grid, vis_mask
-        pass
+        plt.close(self.fig)
+        sys.exit()

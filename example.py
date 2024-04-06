@@ -36,7 +36,7 @@ if __name__=='__main__':
     env = gym.make(
         'SimpleGrid-v0', 
         obstacle_map=obstacle_map, 
-        render_mode='rgb_array_list'
+        render_mode='human'
     )
 
     obs, info = env.reset(seed=1, options=options)
@@ -60,9 +60,10 @@ if __name__=='__main__':
             
             obs, rew, done, _, info = env.step(action)
             
-    env.close()
     if env.render_mode == 'rgb_array_list':
         frames = env.render()
         save_video(frames, f"log/{FOLDER_NAME}", fps=env.fps)
     logger.info("...done")
     logger.info("-------------END-------------")
+    
+    env.close()
