@@ -3,7 +3,7 @@ import logging
 import numpy as np
 from gymnasium import spaces, Env
 import matplotlib.pyplot as plt
-import matplotlib as mlib
+import matplotlib as mpl
 import sys
 
 MAPS = {
@@ -36,7 +36,7 @@ class SimpleGridEnv(Env):
      
     The user can also decide the starting and goal positions of the agent. This can be done by through the `options` dictionary in the `reset` method. The user can specify the starting and goal positions by adding the key-value pairs(`starts_xy`, v1) and `goals_xy`, v2), where v1 and v2 are both of type int (s) or tuple (x,y) and represent the agent starting and goal positions respectively. 
     """
-    metadata = {"render_modes": ["human", "rgb_array"], 'render_fps': 10}
+    metadata = {"render_modes": ["human", "rgb_array"], 'render_fps': 7}
     FREE: int = 0
     OBSTACLE: int = 1
     MOVES: dict[int,tuple] = {
@@ -78,7 +78,6 @@ class SimpleGridEnv(Env):
 
         self.render_mode = render_mode
         self.fps = self.metadata['render_fps']
-        #self.frames = []
 
     def reset(
             self, 
@@ -105,9 +104,9 @@ class SimpleGridEnv(Env):
 
         # initialise internal vars
         self.agent_xy = self.start_xy
-        self.previous_agent_xy = self.agent_xy
         self.reward = self.get_reward(*self.agent_xy)
         self.done = self.on_goal()
+        self.n_iter = 0
 
         # Check integrity
         self.integrity_checks()
@@ -138,6 +137,8 @@ class SimpleGridEnv(Env):
         if self.is_in_bounds(target_row, target_col) and self.is_free(target_row, target_col):
             self.agent_xy = (target_row, target_col)
             self.done = self.on_goal()
+
+        self.n_iter += 1
 
         # if self.render_mode == "human":
         self.render()
@@ -258,7 +259,10 @@ class SimpleGridEnv(Env):
         return self.to_s(*self.agent_xy)
     
     def get_info(self) -> dict:
-        return {'agent_xy': self.agent_xy}
+        return {
+            'agent_xy': self.agent_xy,
+            'n_iter': self.n_iter,
+        }
 
     def render(self):
         """
@@ -267,47 +271,72 @@ class SimpleGridEnv(Env):
         if self.render_mode == "human": 
             if self.fig is None:
                 self.render_initial_frame()
+                self.fig.canvas.mpl_connect('close_event', self.close)
             else:
-                self.render_agent()
+                self.update_agent_patch()
+            
+            self.ax.set_title(f"Step: {self.n_iter}, Reward: {self.reward}")
+            #self.fig.canvas.draw()
+            #self.fig.canvas.flush_events()
             plt.pause(1/self.fps)
+            #plt.show(block=False)
             return None
+        
         elif self.render_mode == "rgb_array":
-            return self.render_frame()
-        # elif mode == "rgb_array_list":
+            # NOT WORKING
+            # mpl.use('Agg')
+            # if self.fig is None:
+            #     self.render_initial_frame()
+            # else:
+            #     self.update_agent_patch()
+            
+            # # return the rendered frame as numpy array
+            # self.fig.canvas.draw()
+            # img = np.frombuffer(self.fig.canvas.tostring_rgb(), dtype=np.uint8)
+            # img = img.reshape(self.fig.canvas.get_width_height()[::-1] + (3,))
+            pass
+        
+        elif self.render_mode == "rgb_array_list":
         #     img = self.render_frame(caption=caption)
         #     self.frames.append(img)
         #     return self.frames
+            pass
+
+        elif self.render_mode == "none":
+            return None
+
         else:
             raise ValueError(f"Unsupported rendering mode {self.render_mode}")
     
-    def render_agent(self):
+    def create_agent_patch(self):
         """
-        @NOTE: Once again, if agent position is (x,y) then, to properly 
-        render it, we have to pass (y,x) to the grid.render method.
-        """
-        
-        self.render_white_patch(*self.previous_agent_xy)
+        Create a Circle patch for the agent.
 
-        # Add agent
-        self.ax.plot(
-            self.agent_xy[1]+.5, 
-            self.agent_xy[0]+.5,
-            'o', 
-            ms=25, 
-            color='orange', 
-            markeredgecolor='black', 
-            linewidth=2
+        @NOTE: If agent position is (x,y) then, to properly render it, we have to pass (y,x) as center to the Circle patch.
+        """
+        return mpl.patches.Circle(
+            (self.agent_xy[1]+.5, self.agent_xy[0]+.5), 
+            0.3, 
+            facecolor='orange', 
+            fill=True, 
+            edgecolor='black', 
+            linewidth=1.5,
+            zorder=100,
         )
-        self.previous_agent_xy = self.agent_xy
 
-        self.fig.canvas.draw()
-        self.fig.canvas.flush_events()
-
+    def update_agent_patch(self):
+        """
+        @NOTE: If agent position is (x,y) then, to properly 
+        render it, we have to pass (y,x) as center to the Circle patch.
+        """
+        self.agent_patch.center = (self.agent_xy[1]+.5, self.agent_xy[0]+.5)
         return None
     
     def render_initial_frame(self):
         """
         Render the initial frame.
+
+        @NOTE: 0: free cell (white), 1: obstacle (black), 2: start (red), 3: goal (green)
         """
         data = self.obstacles.copy()
         data[self.start_xy] = 2
@@ -317,8 +346,8 @@ class SimpleGridEnv(Env):
         bounds=[i-0.1 for i in [0, 1, 2, 3, 4]]
 
         # create discrete colormap
-        cmap = mlib.colors.ListedColormap(colors)
-        norm = mlib.colors.BoundaryNorm(bounds, cmap.N)
+        cmap = mpl.colors.ListedColormap(colors)
+        norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
 
         plt.ion()
         fig, ax = plt.subplots()
@@ -343,26 +372,31 @@ class SimpleGridEnv(Env):
             data, 
             cmap=cmap, 
             norm=norm,
-            extent=[0, data.shape[1], data.shape[0], 0]
+            extent=[0, data.shape[1], data.shape[0], 0],
+            interpolation='none'
         )
 
+        # Create white holes on start and goal positions
         for pos in [self.start_xy, self.goal_xy]:
-            self.render_white_patch(*pos)
+            wp = self.create_white_patch(*pos)
+            ax.add_patch(wp)
 
-        self.fig.canvas.mpl_connect('close_event', self.close)
+        # Create agent patch in start position
+        self.agent_patch = self.create_agent_patch()
+        ax.add_patch(self.agent_patch)
 
         return None
 
-    def render_white_patch(self, x, y):
-        # remove agent with a white patch
-        self.ax.plot(
-            y+.5, 
-            x+.5,
-            'o', 
-            ms=28, 
+    def create_white_patch(self, x, y):
+        """
+        Render a white patch in the given position.
+        """
+        return mpl.patches.Circle(
+            (y+.5, x+.5), 
+            0.4, 
             color='white', 
-            markeredgecolor='white', 
-            linewidth=2
+            fill=True, 
+            zorder=99,
         )
 
     def close(self, *args):
