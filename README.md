@@ -1,6 +1,6 @@
 # Simple Gridworld Gymnasium Environment
 
-SimpleGrid is a super simple gridworld environment for [Gymnasium](https://gymnasium.farama.org/). It is easy to use and customise and it is intended to offer an environment for quickly testing and prototyping different RL algorithms.
+SimpleGrid is a super simple grid environment for [Gymnasium](https://gymnasium.farama.org/). It is easy to use and customise and it is intended to offer an environment for quickly testing and prototyping different RL algorithms.
 
 It is also efficient, lightweight and has few dependencies (gymnasium, numpy, matplotlib). 
 
@@ -161,7 +161,7 @@ It is possible to subclass the `SimpleGridEnv` class  and to override this metho
 
 ## Notes on rendering
 
-The default frame rate is 5 FPS. It is possible to change it through the `metadata` dictionary. 
+The default frame rate is 8 FPS. It is possible to change it through the `metadata` dictionary. 
 
 To properly render the environment, remember that the point (x,y) in the desc matrix corresponds to the point (y,x) in the rendered matrix.
 This is because the rendering code works in terms of width and height while the computation in the environment is done using x and y coordinates.
