@@ -36,7 +36,7 @@ class SimpleGridEnv(Env):
      
     The user can also decide the starting and goal positions of the agent. This can be done by through the `options` dictionary in the `reset` method. The user can specify the starting and goal positions by adding the key-value pairs(`starts_xy`, v1) and `goals_xy`, v2), where v1 and v2 are both of type int (s) or tuple (x,y) and represent the agent starting and goal positions respectively. 
     """
-    metadata = {"render_modes": ["human", "rgb_array"], 'render_fps': 7}
+    metadata = {"render_modes": ["human", "rgb_array", "ansi"], 'render_fps': 8}
     FREE: int = 0
     OBSTACLE: int = 1
     MOVES: dict[int,tuple] = {
@@ -106,6 +106,7 @@ class SimpleGridEnv(Env):
         self.agent_xy = self.start_xy
         self.reward = self.get_reward(*self.agent_xy)
         self.done = self.on_goal()
+        self.agent_action = None
         self.n_iter = 0
 
         # Check integrity
@@ -121,6 +122,7 @@ class SimpleGridEnv(Env):
         Take a step in the environment.
         """
         #assert action in self.action_space
+        self.agent_action = action
 
         # Get the current position of the agent
         row, col = self.agent_xy
@@ -268,45 +270,35 @@ class SimpleGridEnv(Env):
         """
         Render the environment.
         """
-        if self.render_mode == "human": 
-            if self.fig is None:
-                self.render_initial_frame()
-                self.fig.canvas.mpl_connect('close_event', self.close)
-            else:
-                self.update_agent_patch()
-            
-            self.ax.set_title(f"Step: {self.n_iter}, Reward: {self.reward}")
-            #self.fig.canvas.draw()
-            #self.fig.canvas.flush_events()
-            plt.pause(1/self.fps)
-            #plt.show(block=False)
+        if self.render_mode is None:
             return None
         
+        elif self.render_mode == "ansi":
+            s = f"{self.n_iter},{self.agent_xy[0]},{self.agent_xy[1]},{self.reward},{self.done},{self.agent_action}\n"
+            #print(s)
+            return s
+
         elif self.render_mode == "rgb_array":
-            # NOT WORKING
-            # mpl.use('Agg')
-            # if self.fig is None:
-            #     self.render_initial_frame()
-            # else:
-            #     self.update_agent_patch()
-            
-            # # return the rendered frame as numpy array
-            # self.fig.canvas.draw()
-            # img = np.frombuffer(self.fig.canvas.tostring_rgb(), dtype=np.uint8)
-            # img = img.reshape(self.fig.canvas.get_width_height()[::-1] + (3,))
-            pass
-        
-        elif self.render_mode == "rgb_array_list":
-        #     img = self.render_frame(caption=caption)
-        #     self.frames.append(img)
-        #     return self.frames
-            pass
-
-        elif self.render_mode == "none":
+            self.render_frame()
+            self.fig.canvas.draw()
+            img = np.array(self.fig.canvas.renderer.buffer_rgba())
+            return img
+    
+        elif self.render_mode == "human":
+            self.render_frame()
+            plt.pause(1/self.fps)
             return None
-
+        
         else:
             raise ValueError(f"Unsupported rendering mode {self.render_mode}")
+
+    def render_frame(self):
+        if self.fig is None:
+            self.render_initial_frame()
+            self.fig.canvas.mpl_connect('close_event', self.close)
+        else:
+            self.update_agent_patch()
+        self.ax.set_title(f"Step: {self.n_iter}, Reward: {self.reward}")
     
     def create_agent_patch(self):
         """
