@@ -342,7 +342,7 @@ class SimpleGridEnv(Env):
         norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
 
         plt.ion()
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(tight_layout=True)
         self.fig = fig
         self.ax = ax
 
