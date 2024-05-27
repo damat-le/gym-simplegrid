@@ -4,7 +4,11 @@ SimpleGrid is a super simple grid environment for [Gymnasium](https://gymnasium.
 
 It is also efficient, lightweight and has few dependencies (gymnasium, numpy, matplotlib). 
 
-![](img/simplegrid.gif)
+<p align="center">
+    <img src="img/simplegrid_tight.gif" width=80%/>
+</p>
+
+<!-- ![](img/simplegrid.gif) -->
 
 SimpleGrid involves navigating a grid from a Start (red tile) to a Goal (green tile) state without colliding with any Wall (black tiles) by walking over the Empty (white tiles) cells. The yellow circle denotes the agent's current position. 
 
