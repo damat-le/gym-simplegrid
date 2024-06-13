@@ -1,4 +1,10 @@
-# Simple Gridworld Gymnasium Environment
+<a href="https://paypal.me/dmtleo?country.x=IT&locale.x=it_IT" target="_blank">
+<p align=right>
+    <img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" >
+</p>
+</a>
+
+# SimpleGrid: Simple Grid Environment for Gymnasium
 
 SimpleGrid is a super simple grid environment for [Gymnasium](https://gymnasium.farama.org/). It is easy to use and customise and it is intended to offer an environment for quickly testing and prototyping different RL algorithms.
 
