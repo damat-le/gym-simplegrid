@@ -6,7 +6,7 @@
 
 # SimpleGrid: Simple Grid Environment for Gymnasium
 
-SimpleGrid is a super simple grid environment for [Gymnasium](https://gymnasium.farama.org/). It is easy to use and customise and it is intended to offer an environment for quickly testing and prototyping different RL algorithms.
+SimpleGrid is a super simple grid environment for [Gymnasium](https://gymnasium.farama.org/) (formerly OpenAI gym). It is easy to use and customise and it is intended to offer an environment for quickly testing and prototyping different Reinforcement Learning algorithms.
 
 It is also efficient, lightweight and has few dependencies (gymnasium, numpy, matplotlib). 
 
@@ -43,7 +43,7 @@ Please use this bibtex if you want to cite this repository in your publications:
 ```tex
 @misc{gym_simplegrid,
   author = {Leo D'Amato},
-  title = {Simple Gridworld Environment for OpenAI Gym},
+  title = {SimpleGrid: Simple Grid Environment for Gymnasium},
   year = {2022},
   publisher = {GitHub},
   journal = {GitHub repository},
