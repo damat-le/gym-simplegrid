@@ -17,6 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        gymnasium-version: ["<1.0.0", ">=1.0.0"]
 
     steps:
     - uses: actions/checkout@v4
@@ -29,6 +30,7 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install flake8 pytest
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        python -m pip install 'gymnasium${{ matrix.gymnasium-version }}'
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
