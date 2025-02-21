@@ -346,8 +346,7 @@ class SimpleGridEnv(Env):
         self.fig = fig
         self.ax = ax
 
-        #ax.grid(axis='both', color='#D3D3D3', linewidth=2) 
-        ax.grid(axis='both', color='k', linewidth=1.3) 
+        ax.grid(axis='both', color='#141414', linewidth=1.3) 
         ax.set_xticks(np.arange(0, data.shape[1], 1))  # correct grid sizes
         ax.set_yticks(np.arange(0, data.shape[0], 1))
         ax.tick_params(
