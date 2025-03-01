@@ -204,15 +204,21 @@ class SimpleGridEnv(Env):
         return pos_xy
     
     def integrity_checks(self) -> None:
-        # check that goals do not overlap with walls
+        # check that start position does not overlap with walls
         assert self.obstacles[self.start_xy] == self.FREE, \
             f"Start position {self.start_xy} overlaps with a wall."
+        # check that goal position does not overlap with walls
         assert self.obstacles[self.goal_xy] == self.FREE, \
             f"Goal position {self.goal_xy} overlaps with a wall."
+        # check that start position is in bounds
         assert self.is_in_bounds(*self.start_xy), \
             f"Start position {self.start_xy} is out of bounds."
+        # check that goal position is in bounds
         assert self.is_in_bounds(*self.goal_xy), \
             f"Goal position {self.goal_xy} is out of bounds."
+        # check that start and goal positions do not overlap
+        assert self.start_xy != self.goal_xy, \
+            f"Start position {self.start_xy} overlaps with goal position {self.goal_xy}."
         
     def to_s(self, row: int, col: int) -> int:
         """
