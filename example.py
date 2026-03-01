@@ -5,7 +5,7 @@ import logging
 import gymnasium as gym
 from datetime import datetime as dt
 
-from gym_simplegrid.envs.simple_grid import SimpleGridEnv
+from gym_simplegrid.envs import SimpleGridEnv
 
 # --- Configuration & Presets ---
 MAPS: dict[str, list[str]] = {
