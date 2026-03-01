@@ -1,3 +1,9 @@
 [build-system]
 requires = ["setuptools>=42"]
 build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+# This allows pytest to find 'gym_simplegrid' in the root directory
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-v"
